@@ -1,22 +1,28 @@
 import { BasicShaderCode } from "../shaders/BasicShader";
-import { CubeMesh } from "../geometry/CubeData";
+import { Mesh } from "../engine/Mesh";
 
 export class Renderer {
     canvas: HTMLCanvasElement;
     device!: GPUDevice;
     context!: GPUCanvasContext;
     pipeline!: GPURenderPipeline;
-    vertexBuffer!: GPUBuffer;
+
+    vertexBuffer: GPUBuffer | null = null;
+    indexBuffer: GPUBuffer | null = null;
     uniformBuffer!: GPUBuffer;
+    
     bindGroup!: GPUBindGroup;
     depthTexture!: GPUTexture;
+    indexCount: number = 0;
+
+    sampler!: GPUSampler;
+    diffuseTexture!: GPUTexture;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
     }
 
     async initialize() {
-        // Debug inicial
         if (!navigator.gpu) throw new Error("WebGPU não suportado");
         const adapter = await navigator.gpu.requestAdapter();
         if (!adapter) throw new Error("Sem adaptador GPU");
@@ -31,52 +37,37 @@ export class Renderer {
             alphaMode: 'opaque'
         });
 
-        // Classe genérica de shader do WebGPU
         const shaderModule = this.device.createShaderModule({ code: BasicShaderCode });
 
-
-        // Pipeline da GPU
         this.pipeline = this.device.createRenderPipeline({
-            layout: 'auto', // Deixa o WebGPU criar o layout automaticamente
-            
-            // Etapa de Vértices
+            layout: 'auto',
             vertex: {
-                module: shaderModule, // Classe genérica de shader do WebGPU
+                module: shaderModule,
                 entryPoint: 'vs_main',
                 buffers: [{
-                    arrayStride: 24, // 6 floats * 4 bytes
+                    arrayStride: 32, 
                     attributes: [
-                        { shaderLocation: 0, offset: 0, format: 'float32x3' }, // Posição
-                        { shaderLocation: 1, offset: 12, format: 'float32x3' } // Cor
+                        { shaderLocation: 0, offset: 0, format: 'float32x3' }, // pos
+                        { shaderLocation: 1, offset: 3*4, format: 'float32x2' }, // uv
+                        { shaderLocation: 2, offset: 5*4, format: 'float32x3' }, // normals
                     ]
                 }]
             },
-            // Etapa de fragmentação (0/2)
-            // Primitivas (1/2)
             primitive: {
-                topology: 'triangle-list', // A cada 3 vértices, a GPU forma um triãngulo
-                cullMode: 'back' // Back-face culling (um tipo de otimização, explico se precisar)
+                topology: 'triangle-list',
+                cullMode: 'back' 
             },
-            // Fragmentos (fragment shader) (2/2)
             fragment: {
-                module: shaderModule, // Classe genérica de shader do WebGPU
-                entryPoint: 'fs_main', // Função principal do fragment shader lá no código WGSL
+                module: shaderModule,
+                entryPoint: 'fs_main',
                 targets: [{ format: format }]
             },
-            // Etapa de testes
             depthStencil: {
                 depthWriteEnabled: true,
                 depthCompare: 'less',
                 format: 'depth24plus',
             }
         });
-
-        // 3. Buffers
-        this.vertexBuffer = this.device.createBuffer({
-            size: CubeMesh.byteLength,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-        });
-        this.device.queue.writeBuffer(this.vertexBuffer, 0, CubeMesh);
 
         this.uniformBuffer = this.device.createBuffer({
             size: 64,
@@ -88,33 +79,38 @@ export class Renderer {
             entries: [{ binding: 0, resource: { buffer: this.uniformBuffer } }]
         });
 
-        // Depth Texture Inicial
-        const observer = new ResizeObserver(() => {
-            this.resize();
+        this.sampler = this.device.createSampler({
+            magFilter: 'linear',
+            minFilter: 'linear',
+            addressModeU: 'repeat',
+            addressModeV: 'repeat', 
         });
-        observer.observe(this.canvas);
 
+        this.createFallbackTexture();
+
+        this.uniformBuffer = this.device.createBuffer({
+            size: 64,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+
+        this.updateBindGroup();
+
+        const observer = new ResizeObserver(() => this.resize());
+        observer.observe(this.canvas);
         this.resize();
     }
 
     public resize() {
-        // Pegar o aspect ratio do dispositivo
         const devicePixelRatio = window.devicePixelRatio || 1;
-
         const newWidth = Math.max(1, Math.floor(this.canvas.clientWidth * devicePixelRatio));
         const newHeight = Math.max(1, Math.floor(this.canvas.clientHeight * devicePixelRatio));
 
-        // Só redimensiona se o tamanho for realmente diferente
         if (this.canvas.width !== newWidth || this.canvas.height !== newHeight) {
             this.canvas.width = newWidth;
             this.canvas.height = newHeight;
 
-            // Destruir a textura de profundidade antiga para liberar memória
-            if (this.depthTexture) {
-                this.depthTexture.destroy();
-            }
+            if (this.depthTexture) this.depthTexture.destroy();
             
-            // Recriar a textura com o novo tamanho
             this.depthTexture = this.device.createTexture({
                 size: [this.canvas.width, this.canvas.height],
                 format: 'depth24plus',
@@ -124,7 +120,10 @@ export class Renderer {
     }
 
     draw(mvpMatrix: Float32Array) {
-        // Update dos uniforms
+        if (!this.vertexBuffer || !this.indexBuffer || this.indexCount === 0) {
+            return; 
+        }
+
         this.device.queue.writeBuffer(this.uniformBuffer, 0, mvpMatrix as BufferSource);
 
         const commandEncoder = this.device.createCommandEncoder();
@@ -148,9 +147,62 @@ export class Renderer {
         renderPass.setPipeline(this.pipeline);
         renderPass.setBindGroup(0, this.bindGroup);
         renderPass.setVertexBuffer(0, this.vertexBuffer);
-        renderPass.draw(36);
+        renderPass.setIndexBuffer(this.indexBuffer, 'uint32');
+        renderPass.drawIndexed(this.indexCount);
+        
         renderPass.end();
-
         this.device.queue.submit([commandEncoder.finish()]);
+    }
+
+    async setMesh(mesh: Mesh) {
+        if (this.vertexBuffer) this.vertexBuffer.destroy();
+        if (this.indexBuffer) this.indexBuffer.destroy();
+
+        this.vertexBuffer = this.device.createBuffer({
+            size: mesh.vertexData.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        });
+        this.device.queue.writeBuffer(this.vertexBuffer, 0, mesh.vertexData as BufferSource);
+
+        const indexBufferSize = Math.ceil(mesh.indexData.byteLength / 4) * 4;
+        
+        this.indexBuffer = this.device.createBuffer({
+            size: indexBufferSize, 
+            usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+        });
+        this.device.queue.writeBuffer(this.indexBuffer, 0, mesh.indexData as BufferSource);
+        
+        this.indexCount = mesh.indexCount;
+    }
+
+    private createFallbackTexture() {
+        this.diffuseTexture = this.device.createTexture({
+            size: [1, 1],
+            format: 'rgba8unorm',
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
+        });
+        const whitePixel = new Uint8Array([255, 255, 255, 255]);
+        this.device.queue.writeTexture(
+            { texture: this.diffuseTexture },
+            whitePixel,
+            { bytesPerRow: 4 },
+            { width: 1, height: 1 }
+        );
+    }
+
+    public setTexture(texture: GPUTexture) {
+        this.diffuseTexture = texture;
+        this.updateBindGroup();
+    }
+
+    private updateBindGroup() {
+        this.bindGroup = this.device.createBindGroup({
+            layout: this.pipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: this.uniformBuffer } },
+                { binding: 1, resource: this.sampler },
+                { binding: 2, resource: this.diffuseTexture.createView() }
+            ]
+        });
     }
 }
