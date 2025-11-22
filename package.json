@@ -1,0 +1,21 @@
+{
+  "name": "webgpu_implementation",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "npm run install-missing-dependencies && npm run build && npm run serve",
+    "install-missing-dependencies": "npm install",
+    "build": "webpack --config webpack.config.js",
+    "serve": "http-server"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "http-server": "^14.1.1",
+    "typescript": "^5.9.3",
+    "webpack": "^5.102.1",
+    "webpack-cli": "^6.0.1"
+  }
+}
