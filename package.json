@@ -13,9 +13,14 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "gl-matrix": "^3.4.4",
     "http-server": "^14.1.1",
     "typescript": "^5.9.3",
     "webpack": "^5.102.1",
     "webpack-cli": "^6.0.1"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.66",
+    "ts-loader": "^9.5.4"
   }
 }
