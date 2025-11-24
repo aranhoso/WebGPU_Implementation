@@ -14,7 +14,6 @@ export class Renderer {
     bindGroup!: GPUBindGroup;
     depthTexture!: GPUTexture;
     indexCount: number = 0;
-
     sampler!: GPUSampler;
     diffuseTexture!: GPUTexture;
 
@@ -69,21 +68,9 @@ export class Renderer {
             }
         });
 
-        this.uniformBuffer = this.device.createBuffer({
-            size: 64,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-        });
-
-        this.bindGroup = this.device.createBindGroup({
-            layout: this.pipeline.getBindGroupLayout(0),
-            entries: [{ binding: 0, resource: { buffer: this.uniformBuffer } }]
-        });
-
         this.sampler = this.device.createSampler({
             magFilter: 'linear',
             minFilter: 'linear',
-            addressModeU: 'repeat',
-            addressModeV: 'repeat', 
         });
 
         this.createFallbackTexture();
@@ -98,6 +85,37 @@ export class Renderer {
         const observer = new ResizeObserver(() => this.resize());
         observer.observe(this.canvas);
         this.resize();
+    }
+
+    private createFallbackTexture() {
+        this.diffuseTexture = this.device.createTexture({
+            size: [1, 1],
+            format: 'rgba8unorm',
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
+        });
+        const whitePixel = new Uint8Array([255, 255, 255, 255]);
+        this.device.queue.writeTexture(
+            { texture: this.diffuseTexture },
+            whitePixel,
+            { bytesPerRow: 4 },
+            { width: 1, height: 1 }
+        );
+    }
+
+    public setTexture(texture: GPUTexture) {
+        this.diffuseTexture = texture;
+        this.updateBindGroup();
+    }
+
+    private updateBindGroup() {
+        this.bindGroup = this.device.createBindGroup({
+            layout: this.pipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: this.uniformBuffer } }, // uniforms
+                { binding: 1, resource: this.sampler }, // sampler
+                { binding: 2, resource: this.diffuseTexture.createView() } // textura
+            ]
+        });
     }
 
     public resize() {
@@ -164,45 +182,14 @@ export class Renderer {
         });
         this.device.queue.writeBuffer(this.vertexBuffer, 0, mesh.vertexData as BufferSource);
 
-        const indexBufferSize = Math.ceil(mesh.indexData.byteLength / 4) * 4;
-        
+        let indexData = mesh.indexData;
+
         this.indexBuffer = this.device.createBuffer({
-            size: indexBufferSize, 
+            size: indexData.byteLength, 
             usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
         });
-        this.device.queue.writeBuffer(this.indexBuffer, 0, mesh.indexData as BufferSource);
+        this.device.queue.writeBuffer(this.indexBuffer, 0, indexData as BufferSource);
         
         this.indexCount = mesh.indexCount;
-    }
-
-    private createFallbackTexture() {
-        this.diffuseTexture = this.device.createTexture({
-            size: [1, 1],
-            format: 'rgba8unorm',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
-        });
-        const whitePixel = new Uint8Array([255, 255, 255, 255]);
-        this.device.queue.writeTexture(
-            { texture: this.diffuseTexture },
-            whitePixel,
-            { bytesPerRow: 4 },
-            { width: 1, height: 1 }
-        );
-    }
-
-    public setTexture(texture: GPUTexture) {
-        this.diffuseTexture = texture;
-        this.updateBindGroup();
-    }
-
-    private updateBindGroup() {
-        this.bindGroup = this.device.createBindGroup({
-            layout: this.pipeline.getBindGroupLayout(0),
-            entries: [
-                { binding: 0, resource: { buffer: this.uniformBuffer } },
-                { binding: 1, resource: this.sampler },
-                { binding: 2, resource: this.diffuseTexture.createView() }
-            ]
-        });
     }
 }

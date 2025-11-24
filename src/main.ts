@@ -1,4 +1,4 @@
-import { mat4 } from 'gl-matrix';
+import { mat4 } from './engine/Math';
 import { Renderer } from './engine/Renderer';
 import { Camera } from './engine/Camera';
 // import { Input } from './engine/Input';
@@ -10,7 +10,7 @@ const canvas = document.getElementById('gfx-main') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
 const camera = new Camera(canvas.width / canvas.height);
 
-const modelMatrix = mat4.create();
+let modelMatrix = mat4.identity();
 
 const startGame = async () => {
     try {
@@ -32,13 +32,13 @@ const startGame = async () => {
         }
 
         const frame = () => {
-        mat4.rotateY(modelMatrix, modelMatrix, 0.01); 
+            modelMatrix = mat4.yRotate(modelMatrix, 0.01); 
 
-        camera.updateProjection(canvas.width / canvas.height);
-        const mvp = camera.getMatrix(modelMatrix);
-        renderer.draw(mvp as Float32Array);
+            camera.updateProjection(canvas.width / canvas.height);
+            const mvp = camera.getMatrix(modelMatrix);
+            renderer.draw(new Float32Array(mvp));
 
-        requestAnimationFrame(frame);
+            requestAnimationFrame(frame);
         };
 
         console.log("Iniciando Loop de Renderização...");
