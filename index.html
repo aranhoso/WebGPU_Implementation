@@ -15,7 +15,7 @@
             width: 100vw;
             height: 100vh;
         }
-        #fps-counter {
+        #debug-info {
             position: fixed;
             top: 10px;
             left: 10px;
@@ -27,11 +27,15 @@
             border-radius: 4px;
             z-index: 1000;
             pointer-events: none;
+            line-height: 1.5;
         }
     </style>
 </head>
 <body>
-    <div id="fps-counter">FPS: --</div>
+    <div id="debug-info">
+        <div id="fps-counter">FPS: --</div>
+        <div id="coords-display">Pos: (0.00, 0.00, 0.00)</div>
+    </div>
     <canvas id="gfx-main"></canvas>
     <script src="dist/main.js"></script>
 </body>
