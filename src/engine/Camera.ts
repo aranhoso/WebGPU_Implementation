@@ -50,14 +50,35 @@ export class Camera {
     public move(direction: 'FORWARD' | 'BACKWARD' | 'LEFT' | 'RIGHT' | 'UP' | 'DOWN', speed: number) {
         let velocity = [0, 0, 0];
 
-        if (direction === 'FORWARD') velocity = vec3.scale(this.front, speed);
-        if (direction === 'BACKWARD') velocity = vec3.scale(this.front, -speed);
+        const flatFront = vec3.normalize([this.front[0], 0, this.front[2]]);
+
+        if (direction === 'FORWARD') velocity = vec3.scale(flatFront, speed);
+        if (direction === 'BACKWARD') velocity = vec3.scale(flatFront, -speed);
         if (direction === 'LEFT') velocity = vec3.scale(this.right, -speed);
         if (direction === 'RIGHT') velocity = vec3.scale(this.right, speed);
         if (direction === 'UP') velocity = vec3.scale(this.worldUp, speed);
         if (direction === 'DOWN') velocity = vec3.scale(this.worldUp, -speed);
 
         this.position = vec3.add(this.position, velocity);
+    }
+
+    public tryMove(direction: 'FORWARD' | 'BACKWARD' | 'LEFT' | 'RIGHT' | 'UP' | 'DOWN', speed: number): number[] {
+        let velocity = [0, 0, 0];
+
+        const flatFront = vec3.normalize([this.front[0], 0, this.front[2]]);
+
+        if (direction === 'FORWARD') velocity = vec3.scale(flatFront, speed);
+        if (direction === 'BACKWARD') velocity = vec3.scale(flatFront, -speed);
+        if (direction === 'LEFT') velocity = vec3.scale(this.right, -speed);
+        if (direction === 'RIGHT') velocity = vec3.scale(this.right, speed);
+        if (direction === 'UP') velocity = vec3.scale(this.worldUp, speed);
+        if (direction === 'DOWN') velocity = vec3.scale(this.worldUp, -speed);
+
+        return vec3.add(this.position, velocity);
+    }
+
+    public setPosition(pos: number[]): void {
+        this.position = [...pos];
     }
 
     public updateView() {

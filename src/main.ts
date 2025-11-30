@@ -3,6 +3,7 @@ import { Renderer } from './engine/Renderer';
 import { Camera } from './engine/Camera';
 import { Scene } from './engine/Scene';
 import { Input } from './engine/Input';
+import { CollisionSystem } from './engine/Collision';
 
 const canvas = document.getElementById('gfx-main') as HTMLCanvasElement;
 
@@ -35,6 +36,11 @@ const startGame = async () => {
             console.warn("Falha ao carregar o mapa Bhop_Ray");
         }
 
+        const collision = new CollisionSystem(0.5, 1.8);
+        if (mapObj && mapObj.mesh) {
+            collision.loadMeshCollision(mapObj.mesh);
+        }
+
         const arcticObj = await scene.loadObject(
             'src/assets/Arctic_T/Arctic_T.obj',
             'src/assets/Arctic_T/t_arctic.png'
@@ -48,14 +54,22 @@ const startGame = async () => {
 
         const moveSpeed = 10;
 
+        // Função auxiliar para mover com colisão
+        const moveWithCollision = (direction: 'FORWARD' | 'BACKWARD' | 'LEFT' | 'RIGHT' | 'UP' | 'DOWN', speed: number) => {
+            const oldPos = [...camera.position];
+            const newPos = camera.tryMove(direction, speed);
+            const resolvedPos = collision.resolveCollision(oldPos, newPos);
+            camera.setPosition(resolvedPos);
+        };
+
         scene.start((scene, deltaTime) => {
-            if (input.isKeyPressed('KeyW')) camera.move('FORWARD', moveSpeed * deltaTime);
-            if (input.isKeyPressed('KeyS')) camera.move('BACKWARD', moveSpeed * deltaTime);
-            if (input.isKeyPressed('KeyA')) camera.move('LEFT', moveSpeed * deltaTime);
-            if (input.isKeyPressed('KeyD')) camera.move('RIGHT', moveSpeed * deltaTime);
+            if (input.isKeyPressed('KeyW')) moveWithCollision('FORWARD', moveSpeed * deltaTime);
+            if (input.isKeyPressed('KeyS')) moveWithCollision('BACKWARD', moveSpeed * deltaTime);
+            if (input.isKeyPressed('KeyA')) moveWithCollision('LEFT', moveSpeed * deltaTime);
+            if (input.isKeyPressed('KeyD')) moveWithCollision('RIGHT', moveSpeed * deltaTime);
             
-            if (input.isKeyPressed('Space')) camera.move('UP', moveSpeed * deltaTime);
-            if (input.isKeyPressed('LeftCtrl') || input.isKeyPressed('LeftCtrl')) camera.move('DOWN', moveSpeed * deltaTime);
+            if (input.isKeyPressed('Space')) moveWithCollision('UP', moveSpeed * deltaTime);
+            if (input.isKeyPressed('ControlLeft') || input.isKeyPressed('ControlRight')) moveWithCollision('DOWN', moveSpeed * deltaTime);
             
             if (input.isLocked()) {
                 const mouseDelta = input.getMouseDelta();
