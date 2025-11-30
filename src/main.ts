@@ -4,6 +4,7 @@ import { Camera } from './engine/Camera';
 import { Scene } from './engine/Scene';
 import { Input } from './engine/Input';
 import { CollisionSystem } from './engine/Collision';
+import { PlayerMovement } from './engine/PlayerMovement';
 
 const canvas = document.getElementById('gfx-main') as HTMLCanvasElement;
 
@@ -52,20 +53,16 @@ const startGame = async () => {
 
         camera.position = [-24, 10, 19]; // x y z
 
-        const moveSpeed = 10;
+        const playerMovement = new PlayerMovement();
+        playerMovement.setCollisionSystem(collision);
+        playerMovement.setPosition([...camera.position]);
+        playerMovement.setEyeHeight(1.6);
+
         let noclip = false;
         let altPressed = false;
 
-        const moveWithCollision = (direction: 'FORWARD' | 'BACKWARD' | 'LEFT' | 'RIGHT' | 'UP' | 'DOWN', speed: number) => {
-            const oldPos = [...camera.position];
-            const newPos = camera.tryMove(direction, speed);
-            const resolvedPos = collision.resolveCollision(oldPos, newPos);
-            camera.setPosition(resolvedPos);
-        };
-
-        const moveWithoutCollision = (direction: 'FORWARD' | 'BACKWARD' | 'LEFT' | 'RIGHT' | 'UP' | 'DOWN', speed: number) => {
-            camera.move(direction, speed);
-        };
+        const speedElement = document.getElementById('speed-display');
+        const groundedElement = document.getElementById('grounded-display');
 
         scene.start((scene, deltaTime) => {
             if (input.isKeyPressed('AltLeft')) {
@@ -78,19 +75,45 @@ const startGame = async () => {
                 altPressed = false;
             }
 
-            const moveFunc = noclip ? moveWithoutCollision : moveWithCollision;
-
-            if (input.isKeyPressed('KeyW')) moveFunc('FORWARD', moveSpeed * deltaTime);
-            if (input.isKeyPressed('KeyS')) moveFunc('BACKWARD', moveSpeed * deltaTime);
-            if (input.isKeyPressed('KeyA')) moveFunc('LEFT', moveSpeed * deltaTime);
-            if (input.isKeyPressed('KeyD')) moveFunc('RIGHT', moveSpeed * deltaTime);
-            
-            if (input.isKeyPressed('Space')) moveFunc('UP', moveSpeed * deltaTime);
-            if (input.isKeyPressed('ControlLeft') || input.isKeyPressed('ControlRight')) moveFunc('DOWN', moveSpeed * deltaTime);
-            
             if (input.isLocked()) {
                 const mouseDelta = input.getMouseDelta();
                 camera.updateRotation(mouseDelta.x, mouseDelta.y);
+            }
+
+            if (noclip) {
+                // modo noclip
+                const noclipSpeed = 15;
+                if (input.isKeyPressed('KeyW')) camera.move('FORWARD', noclipSpeed * deltaTime);
+                if (input.isKeyPressed('KeyS')) camera.move('BACKWARD', noclipSpeed * deltaTime);
+                if (input.isKeyPressed('KeyA')) camera.move('LEFT', noclipSpeed * deltaTime);
+                if (input.isKeyPressed('KeyD')) camera.move('RIGHT', noclipSpeed * deltaTime);
+                if (input.isKeyPressed('Space')) camera.move('UP', noclipSpeed * deltaTime);
+                if (input.isKeyPressed('ControlLeft') || input.isKeyPressed('ControlRight')) camera.move('DOWN', noclipSpeed * deltaTime);
+            } else {
+                // modo normal
+                playerMovement.updateDirections(camera.getFront(), camera.getRight());
+                
+                let inputX = 0;
+                let inputZ = 0;
+                
+                if (input.isKeyPressed('KeyW')) inputZ += 1;
+                if (input.isKeyPressed('KeyS')) inputZ -= 1;
+                if (input.isKeyPressed('KeyA')) inputX -= 1;
+                if (input.isKeyPressed('KeyD')) inputX += 1;
+                
+                const jumpPressed = input.isKeyPressed('Space');
+                
+                playerMovement.update(deltaTime, inputX, inputZ, jumpPressed);
+                
+                camera.setPosition(playerMovement.getPosition());
+                
+                if (speedElement) {
+                    const speed = playerMovement.getSpeed();
+                    speedElement.textContent = `Speed: ${speed.toFixed(2)} u/s`;
+                }
+                if (groundedElement) {
+                    groundedElement.textContent = `Grounded: ${playerMovement.getIsGrounded() ? 'Yes' : 'No'}`;
+                }
             }
         });
 

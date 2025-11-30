@@ -18,6 +18,9 @@ export class CollisionSystem {
     private playerRadius: number;
     private playerHeight: number;
     private eyeHeight: number;
+    
+    // angulo maximo para ser considerado um chão
+    private minGroundNormalY: number = 0.7; // +ou- 75 graus
 
     constructor(playerRadius: number = 0.3, playerHeight: number = 1.8, eyeHeight: number = 1.6) {
         this.playerRadius = playerRadius;
@@ -68,6 +71,14 @@ export class CollisionSystem {
 
     public resolveCollision(oldPos: number[], newPos: number[]): number[] {
         let resultPos = [...newPos];
+
+        const groundHeight = this.getGroundHeight(resultPos);
+        if (groundHeight !== null) {
+            const minY = groundHeight + this.eyeHeight + 0.05;
+            if (resultPos[1] < minY) {
+                resultPos[1] = minY;
+            }
+        }
         
         const feetY = resultPos[1] - this.eyeHeight;
         const sphereCenterY = feetY + this.playerHeight / 2;
@@ -77,26 +88,47 @@ export class CollisionSystem {
             radius: this.playerRadius
         };
 
-        for (const tri of this.triangles) {
-            const collision = this.sphereTriangleCollision(playerSphere, tri);
+        for (let iteration = 0; iteration < 3; iteration++) {
+            let hadCollision = false;
             
-            if (collision.collided) {
-                const pushVector = vec3.scale(collision.normal, collision.depth);
-                resultPos[0] += pushVector[0];
-                resultPos[1] += pushVector[1];
-                resultPos[2] += pushVector[2];
+            for (const tri of this.triangles) {
+                const collision = this.sphereTriangleCollision(playerSphere, tri);
                 
-                const newFeetY = resultPos[1] - this.eyeHeight;
-                const newSphereCenterY = newFeetY + this.playerHeight / 2;
-                playerSphere.center = [resultPos[0], newSphereCenterY, resultPos[2]];
+                if (collision.collided) {
+                    hadCollision = true;
+
+                    const isWalkable = tri.normal[1] >= this.minGroundNormalY;
+                    
+                    if (isWalkable) {
+                        const pushVector = vec3.scale(collision.normal, collision.depth + 0.01);
+                        resultPos[0] += pushVector[0];
+                        resultPos[1] += pushVector[1];
+                        resultPos[2] += pushVector[2];
+                    } else {
+                        const horizontalLen = Math.sqrt(collision.normal[0] * collision.normal[0] + collision.normal[2] * collision.normal[2]);
+                        
+                        if (horizontalLen > 0.001) {
+                            const horizontalNormal = [collision.normal[0] / horizontalLen, 0, collision.normal[2] / horizontalLen];
+                            const pushVector = vec3.scale(horizontalNormal, collision.depth + 0.01);
+                            resultPos[0] += pushVector[0];
+                            resultPos[2] += pushVector[2];
+                        }
+                    }
+                    
+                    const newFeetY = resultPos[1] - this.eyeHeight;
+                    const newSphereCenterY = newFeetY + this.playerHeight / 2;
+                    playerSphere.center = [resultPos[0], newSphereCenterY, resultPos[2]];
+                }
             }
+            
+            if (!hadCollision) break;
         }
         
-        const groundHeight = this.getGroundHeight(resultPos);
-        if (groundHeight !== null) {
-            const feetHeight = resultPos[1] - this.eyeHeight;
-            if (feetHeight < groundHeight + 0.01) {
-                resultPos[1] = groundHeight + this.eyeHeight;
+        const finalGroundHeight = this.getGroundHeight(resultPos);
+        if (finalGroundHeight !== null) {
+            const minY = finalGroundHeight + this.eyeHeight;
+            if (resultPos[1] < minY) {
+                resultPos[1] = minY;
             }
         }
         
