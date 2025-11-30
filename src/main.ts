@@ -1,48 +1,33 @@
 import { mat4 } from './engine/Math';
 import { Renderer } from './engine/Renderer';
 import { Camera } from './engine/Camera';
+import { Scene } from './engine/Scene';
 // import { Input } from './engine/Input';
-import { ObjLoader } from './loader/ObjLoader';
-import { TextureLoader } from './loader/TextureLoader';
 
 const canvas = document.getElementById('gfx-main') as HTMLCanvasElement;
 
 const renderer = new Renderer(canvas);
 const camera = new Camera(canvas.width / canvas.height);
-
-let modelMatrix = mat4.identity();
+const scene = new Scene(renderer, camera);
 
 const startGame = async () => {
     try {
         await renderer.initialize();
 
-        const meshPromise = ObjLoader.load('src/assets/Arctic_T/Arctic_T.obj');
-        const texturePromise = TextureLoader.load(renderer.device, 'src/assets/Arctic_T/t_arctic.png');
+        const arcticObj = await scene.loadObject(
+            'src/assets/Arctic_T/Arctic_T.obj',
+            'src/assets/Arctic_T/t_arctic.png'
+        );
 
-        const [mesh, texture] = await Promise.all([meshPromise, texturePromise]);
-
-        if (mesh) {
-            console.log("Mesh carregada.");
-            await renderer.setMesh(mesh);
-        }
-        
-        if (texture) {
-            console.log("Textura carregada.");
-            renderer.setTexture(texture);
+        if (!arcticObj) {
+            throw new Error("Falha ao carregar o objeto Arctic_T");
         }
 
-        const frame = () => {
-            modelMatrix = mat4.yRotate(modelMatrix, 0.01); 
-
-            camera.updateProjection(canvas.width / canvas.height);
-            const mvp = camera.getMatrix(modelMatrix);
-            renderer.draw(new Float32Array(mvp));
-
-            requestAnimationFrame(frame);
-        };
-
-        console.log("Iniciando Loop de Renderização...");
-        requestAnimationFrame(frame);
+        scene.start((scene, deltaTime) => {
+            if (arcticObj) {
+                arcticObj.modelMatrix = mat4.yRotate(arcticObj.modelMatrix, 0.01);
+            }
+        });
 
     } catch (error) {
         console.error("Falha ao iniciar a engine:", error);
