@@ -305,9 +305,9 @@ export var mat4 = {
         var yAxis = vec3.normalize(vec3.cross(zAxis, xAxis));
 
         return [
-            xAxis[0], xAxis[1], xAxis[2], 0,
-            yAxis[0], yAxis[1], yAxis[2], 0,
-            zAxis[0], zAxis[1], zAxis[2], 0,
+            xAxis[0], yAxis[0], zAxis[0], 0,
+            xAxis[1], yAxis[1], zAxis[1], 0,
+            xAxis[2], yAxis[2], zAxis[2], 0,
             -(xAxis[0] * cameraPosition[0] + xAxis[1] * cameraPosition[1] + xAxis[2] * cameraPosition[2]),
             -(yAxis[0] * cameraPosition[0] + yAxis[1] * cameraPosition[1] + yAxis[2] * cameraPosition[2]),
             -(zAxis[0] * cameraPosition[0] + zAxis[1] * cameraPosition[1] + zAxis[2] * cameraPosition[2]),

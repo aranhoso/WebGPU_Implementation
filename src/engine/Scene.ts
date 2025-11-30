@@ -185,7 +185,6 @@ export class Scene {
 
         let lastTime = performance.now();
         
-        // FPS counter and coordinates display
         let frameCount = 0;
         let fpsLastTime = performance.now();
         const fpsElement = document.getElementById('fps-counter');
@@ -207,7 +206,6 @@ export class Scene {
                 fpsLastTime = currentTime;
             }
 
-            // Update camera coordinates display
             if (coordsElement) {
                 const pos = this.camera.position;
                 coordsElement.textContent = `Pos: (${pos[0].toFixed(2)}, ${pos[1].toFixed(2)}, ${pos[2].toFixed(2)})`;

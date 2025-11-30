@@ -31,7 +31,7 @@ fn sky_vert_main(@builtin(vertex_index) VertexIndex : u32) -> VertexOutput {
     var x: f32 = positions[VertexIndex].x;
     var y: f32 = positions[VertexIndex].y;
 
-    output.direction = normalize(camera.forwards - x * camera.right + y * camera.up); 
+    output.direction = normalize(camera.forwards + x * camera.right + y * camera.up);
     return output;
 }
 
