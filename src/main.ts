@@ -29,11 +29,11 @@ const startGame = async () => {
         await scene.loadSkybox(skyboxUrls);
 
         const mapObj = await scene.loadObjectWithMaterials(
-            'src/assets/Bhop_Ray/Untitled.obj'
+            'src/assets/Bhop_Seal/Untitled.obj'
         );
 
         if (!mapObj) {
-            console.warn("Falha ao carregar o mapa Bhop_Ray");
+            console.warn("Falha ao carregar o mapa Bhop_Seal");
         }
 
         const collision = new CollisionSystem(0.5, 1.8);
@@ -50,11 +50,12 @@ const startGame = async () => {
             throw new Error("Falha ao carregar o objeto Arctic_T");
         }
 
-        camera.position = [0, 2, 5];
+        camera.position = [-24, 10, 19]; // x y z
 
         const moveSpeed = 10;
+        let noclip = false;
+        let altPressed = false;
 
-        // Função auxiliar para mover com colisão
         const moveWithCollision = (direction: 'FORWARD' | 'BACKWARD' | 'LEFT' | 'RIGHT' | 'UP' | 'DOWN', speed: number) => {
             const oldPos = [...camera.position];
             const newPos = camera.tryMove(direction, speed);
@@ -62,14 +63,30 @@ const startGame = async () => {
             camera.setPosition(resolvedPos);
         };
 
+        const moveWithoutCollision = (direction: 'FORWARD' | 'BACKWARD' | 'LEFT' | 'RIGHT' | 'UP' | 'DOWN', speed: number) => {
+            camera.move(direction, speed);
+        };
+
         scene.start((scene, deltaTime) => {
-            if (input.isKeyPressed('KeyW')) moveWithCollision('FORWARD', moveSpeed * deltaTime);
-            if (input.isKeyPressed('KeyS')) moveWithCollision('BACKWARD', moveSpeed * deltaTime);
-            if (input.isKeyPressed('KeyA')) moveWithCollision('LEFT', moveSpeed * deltaTime);
-            if (input.isKeyPressed('KeyD')) moveWithCollision('RIGHT', moveSpeed * deltaTime);
+            if (input.isKeyPressed('AltLeft')) {
+                if (!altPressed) {
+                    noclip = !noclip;
+                    console.log(`Noclip: ${noclip ? 'ATIVADO' : 'DESATIVADO'}`);
+                    altPressed = true;
+                }
+            } else {
+                altPressed = false;
+            }
+
+            const moveFunc = noclip ? moveWithoutCollision : moveWithCollision;
+
+            if (input.isKeyPressed('KeyW')) moveFunc('FORWARD', moveSpeed * deltaTime);
+            if (input.isKeyPressed('KeyS')) moveFunc('BACKWARD', moveSpeed * deltaTime);
+            if (input.isKeyPressed('KeyA')) moveFunc('LEFT', moveSpeed * deltaTime);
+            if (input.isKeyPressed('KeyD')) moveFunc('RIGHT', moveSpeed * deltaTime);
             
-            if (input.isKeyPressed('Space')) moveWithCollision('UP', moveSpeed * deltaTime);
-            if (input.isKeyPressed('ControlLeft') || input.isKeyPressed('ControlRight')) moveWithCollision('DOWN', moveSpeed * deltaTime);
+            if (input.isKeyPressed('Space')) moveFunc('UP', moveSpeed * deltaTime);
+            if (input.isKeyPressed('ControlLeft') || input.isKeyPressed('ControlRight')) moveFunc('DOWN', moveSpeed * deltaTime);
             
             if (input.isLocked()) {
                 const mouseDelta = input.getMouseDelta();
