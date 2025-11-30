@@ -26,7 +26,6 @@ const startGame = async () => {
 
         await scene.loadSkybox(skyboxUrls);
 
-        // Carrega o mapa com suporte a múltiplos materiais
         const mapObj = await scene.loadObjectWithMaterials(
             'src/assets/Bhop_Ray/Untitled.obj'
         );
