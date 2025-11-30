@@ -79,6 +79,10 @@ export class Renderer {
         this.sampler = this.device.createSampler({
             magFilter: 'linear',
             minFilter: 'linear',
+            mipmapFilter: 'linear',
+            addressModeU: 'repeat',
+            addressModeV: 'repeat',
+            maxAnisotropy: 16,
         });
 
         this.createFallbackTexture();

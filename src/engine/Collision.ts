@@ -15,10 +15,10 @@ export interface AABB {
 
 export class CollisionSystem {
     private triangles: Triangle[] = [];
-    private playerRadius: number = 0.3;
-    private playerHeight: number = 1.8;
+    private playerRadius: number;
+    private playerHeight: number
 
-    constructor(playerRadius: number = 0.3, playerHeight: number = 1.8) {
+    constructor(playerRadius: number = 0.3, playerHeight: number = 3) {
         this.playerRadius = playerRadius;
         this.playerHeight = playerHeight;
     }
