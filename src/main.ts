@@ -35,8 +35,8 @@ const startGame = async () => {
         if (!mapObj) {
             console.warn("Falha ao carregar o mapa Bhop_Seal");
         }
-
-        const collision = new CollisionSystem(0.5, 1.8);
+        
+        const collision = new CollisionSystem(0.4, 1.8, 1.6);
         if (mapObj && mapObj.mesh) {
             collision.loadMeshCollision(mapObj.mesh);
         }

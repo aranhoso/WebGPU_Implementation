@@ -16,11 +16,13 @@ export interface AABB {
 export class CollisionSystem {
     private triangles: Triangle[] = [];
     private playerRadius: number;
-    private playerHeight: number
+    private playerHeight: number;
+    private eyeHeight: number;
 
-    constructor(playerRadius: number = 0.3, playerHeight: number = 3) {
+    constructor(playerRadius: number = 0.3, playerHeight: number = 1.8, eyeHeight: number = 1.6) {
         this.playerRadius = playerRadius;
         this.playerHeight = playerHeight;
+        this.eyeHeight = eyeHeight;
     }
 
     public loadMeshCollision(mesh: Mesh): void {
@@ -67,8 +69,11 @@ export class CollisionSystem {
     public resolveCollision(oldPos: number[], newPos: number[]): number[] {
         let resultPos = [...newPos];
         
+        const feetY = resultPos[1] - this.eyeHeight;
+        const sphereCenterY = feetY + this.playerHeight / 2;
+        
         const playerSphere = {
-            center: [resultPos[0], resultPos[1] + this.playerHeight / 2, resultPos[2]],
+            center: [resultPos[0], sphereCenterY, resultPos[2]],
             radius: this.playerRadius
         };
 
@@ -81,7 +86,17 @@ export class CollisionSystem {
                 resultPos[1] += pushVector[1];
                 resultPos[2] += pushVector[2];
                 
-                playerSphere.center = [resultPos[0], resultPos[1] + this.playerHeight / 2, resultPos[2]];
+                const newFeetY = resultPos[1] - this.eyeHeight;
+                const newSphereCenterY = newFeetY + this.playerHeight / 2;
+                playerSphere.center = [resultPos[0], newSphereCenterY, resultPos[2]];
+            }
+        }
+        
+        const groundHeight = this.getGroundHeight(resultPos);
+        if (groundHeight !== null) {
+            const feetHeight = resultPos[1] - this.eyeHeight;
+            if (feetHeight < groundHeight + 0.01) {
+                resultPos[1] = groundHeight + this.eyeHeight;
             }
         }
         
