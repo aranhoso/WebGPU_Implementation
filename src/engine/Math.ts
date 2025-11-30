@@ -344,5 +344,9 @@ export const vec3 = {
             a[2] * b[0] - a[0] * b[2],
             a[0] * b[1] - a[1] * b[0]
         ];
+    },
+
+    length: function (v: number[]) {
+        return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
     }
 };

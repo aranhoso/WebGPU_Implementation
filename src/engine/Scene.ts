@@ -16,10 +16,26 @@ export class Scene {
     private camera: Camera;
     private objects: SceneObject[] = [];
     private isRunning: boolean = false;
+    private hasSkybox: boolean = false;
 
     constructor(renderer: Renderer, camera: Camera) {
         this.renderer = renderer;
         this.camera = camera;
+    }
+
+    public async loadSkybox(urls: string[]): Promise<boolean> {
+        try {
+            if (urls.length !== 6) {
+                console.error("Skybox requer 6 URLs de textura");
+                return false;
+            }
+            await this.renderer.setSkybox(urls);
+            this.hasSkybox = true;
+            return true;
+        } catch (error) {
+            console.error("Erro ao carregar skybox:", error);
+            return false;
+        }
     }
 
     public async loadObject(objPath: string, texturePath?: string): Promise<SceneObject | null> {
@@ -81,6 +97,14 @@ export class Scene {
 
 
     public render(): void {
+        if (this.hasSkybox) {
+            this.renderer.drawSky(
+                this.camera.getFront(),
+                this.camera.getRight(),
+                this.camera.getUp()
+            );
+        }
+
         for (const obj of this.objects) {
             this.renderer.setMesh(obj.mesh);
             if (obj.texture) {
@@ -89,7 +113,7 @@ export class Scene {
 
             this.camera.updateProjection(this.renderer.canvas.width / this.renderer.canvas.height);
             const mvp = this.camera.getMatrix(obj.modelMatrix);
-            this.renderer.draw(new Float32Array(mvp));
+            this.renderer.drawObjects(new Float32Array(mvp));
         }
     }
 

@@ -70,4 +70,49 @@ export class Camera {
         
         return mvp;
     }
+
+    public getFront(): number[] {
+        return this.front;
+    }
+
+    public getRight(): number[] {
+        return this.right;
+    }
+
+    public getUp(): number[] {
+        return this.up;
+    }
+
+    // função só pra rotacionar a camera pra ver o cubemap
+    public orbit(target: number[], angle: number, axis: 'x' | 'y' = 'y') {
+        const offset = vec3.subtract(this.position, target);
+        const radius = vec3.length(offset);
+
+        if (axis === 'y') {
+            this.yaw += angle;
+        } else {
+            this.pitch += angle;
+            if (this.pitch > 1.55) this.pitch = 1.55;
+            if (this.pitch < -1.55) this.pitch = -1.55;
+        }
+
+        const x = radius * Math.cos(this.pitch) * Math.cos(this.yaw);
+        const y = radius * Math.sin(this.pitch);
+        const z = radius * Math.cos(this.pitch) * Math.sin(this.yaw);
+
+        this.position = vec3.add(target, [x, y, z]);
+
+        this.front = vec3.normalize(vec3.subtract(target, this.position));
+        this.right = vec3.normalize(vec3.cross(this.front, this.worldUp));
+        this.up = vec3.normalize(vec3.cross(this.right, this.front));
+    }
+
+    public lookAt(target: number[]) {
+        this.front = vec3.normalize(vec3.subtract(target, this.position));
+        this.right = vec3.normalize(vec3.cross(this.front, this.worldUp));
+        this.up = vec3.normalize(vec3.cross(this.right, this.front));
+
+        this.yaw = Math.atan2(this.front[2], this.front[0]);
+        this.pitch = Math.asin(this.front[1]);
+    }
 }
