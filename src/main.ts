@@ -26,6 +26,15 @@ const startGame = async () => {
 
         await scene.loadSkybox(skyboxUrls);
 
+        // Carrega o mapa com suporte a múltiplos materiais
+        const mapObj = await scene.loadObjectWithMaterials(
+            'src/assets/Bhop_Ray/Untitled.obj'
+        );
+
+        if (!mapObj) {
+            console.warn("Falha ao carregar o mapa Bhop_Ray");
+        }
+
         const arcticObj = await scene.loadObject(
             'src/assets/Arctic_T/Arctic_T.obj',
             'src/assets/Arctic_T/t_arctic.png'

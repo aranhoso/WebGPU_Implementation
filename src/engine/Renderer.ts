@@ -149,24 +149,44 @@ export class Renderer {
         });
     }
 
+    private fallbackTexture!: GPUTexture;
+
     private createFallbackTexture() {
-        this.diffuseTexture = this.device.createTexture({
+        this.fallbackTexture = this.device.createTexture({
             size: [1, 1],
             format: 'rgba8unorm',
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
         });
         const whitePixel = new Uint8Array([255, 255, 255, 255]);
         this.device.queue.writeTexture(
-            { texture: this.diffuseTexture },
+            { texture: this.fallbackTexture },
             whitePixel,
             { bytesPerRow: 4 },
             { width: 1, height: 1 }
         );
+        this.diffuseTexture = this.fallbackTexture;
     }
 
+    // Cache de bind groups por textura para evitar recriação a cada frame
+    private bindGroupCache = new Map<GPUTexture, GPUBindGroup>();
+
     public setTexture(texture: GPUTexture) {
+        if (this.diffuseTexture === texture) return;
+        
         this.diffuseTexture = texture;
-        this.updateBindGroup();
+        
+        // Verifica se já tem um bind group cacheado para esta textura
+        let cachedBindGroup = this.bindGroupCache.get(texture);
+        if (cachedBindGroup) {
+            this.bindGroup = cachedBindGroup;
+        } else {
+            this.updateBindGroup();
+            this.bindGroupCache.set(texture, this.bindGroup);
+        }
+    }
+
+    public resetTexture() {
+        this.setTexture(this.fallbackTexture);
     }
 
     private updateBindGroup() {
@@ -178,6 +198,10 @@ export class Renderer {
                 { binding: 2, resource: this.diffuseTexture.createView() } // textura
             ]
         });
+    }
+
+    public clearBindGroupCache() {
+        this.bindGroupCache.clear();
     }
 
     public resize() {
@@ -197,6 +221,66 @@ export class Renderer {
                 usage: GPUTextureUsage.RENDER_ATTACHMENT
             });
         }
+    }
+
+    private commandEncoder!: GPUCommandEncoder;
+    private renderPass!: GPURenderPassEncoder;
+    private frameStarted: boolean = false;
+
+    public beginFrame() {
+        this.commandEncoder = this.device.createCommandEncoder();
+        const textureView = this.context.getCurrentTexture().createView();
+
+        this.renderPass = this.commandEncoder.beginRenderPass({
+            colorAttachments: [{
+                view: textureView,
+                clearValue: { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
+                loadOp: 'clear',
+                storeOp: 'store'
+            }],
+            depthStencilAttachment: {
+                view: this.depthTexture.createView(),
+                depthClearValue: 1.0,
+                depthLoadOp: 'clear',
+                depthStoreOp: 'store'
+            }
+        });
+
+        this.frameStarted = true;
+    }
+
+    public endFrame() {
+        if (!this.frameStarted) return;
+        
+        this.renderPass.end();
+        this.device.queue.submit([this.commandEncoder.finish()]);
+        this.frameStarted = false;
+    }
+
+    public drawSkyboxInFrame(cameraForward: number[], cameraRight: number[], cameraUp: number[]) {
+        if (!this.skyMaterial || !this.skyBindGroup || !this.frameStarted) return;
+
+        const cameraData = new Float32Array(12);
+        cameraData.set(cameraForward, 0);
+        cameraData.set(cameraRight, 4);
+        cameraData.set(cameraUp, 8);
+        this.device.queue.writeBuffer(this.skyUniformBuffer, 0, cameraData);
+
+        this.renderPass.setPipeline(this.skyPipeline);
+        this.renderPass.setBindGroup(0, this.skyBindGroup);
+        this.renderPass.draw(6);
+    }
+
+    public drawMeshInFrame(mvpMatrix: Float32Array, startIndex: number = 0, indexCount?: number) {
+        if (!this.vertexBuffer || !this.indexBuffer || !this.frameStarted) return;
+
+        this.device.queue.writeBuffer(this.uniformBuffer, 0, mvpMatrix as BufferSource);
+
+        this.renderPass.setPipeline(this.pipeline);
+        this.renderPass.setBindGroup(0, this.bindGroup);
+        this.renderPass.setVertexBuffer(0, this.vertexBuffer);
+        this.renderPass.setIndexBuffer(this.indexBuffer, 'uint32');
+        this.renderPass.drawIndexed(indexCount ?? this.indexCount, 1, startIndex, 0, 0);
     }
 
     draw(mvpMatrix: Float32Array) {
@@ -234,25 +318,50 @@ export class Renderer {
         this.device.queue.submit([commandEncoder.finish()]);
     }
 
-    async setMesh(mesh: Mesh) {
-        if (this.vertexBuffer) this.vertexBuffer.destroy();
-        if (this.indexBuffer) this.indexBuffer.destroy();
+    // Cache de buffers por mesh para evitar recriação a cada frame
+    private meshBufferCache = new Map<Mesh, { vertexBuffer: GPUBuffer, indexBuffer: GPUBuffer }>();
+    private currentMesh: Mesh | null = null;
 
-        this.vertexBuffer = this.device.createBuffer({
+    setMesh(mesh: Mesh) {
+        if (this.currentMesh === mesh) return;
+        
+        this.currentMesh = mesh;
+        
+        // Verifica se já tem buffers cacheados para esta mesh
+        let cached = this.meshBufferCache.get(mesh);
+        if (cached) {
+            this.vertexBuffer = cached.vertexBuffer;
+            this.indexBuffer = cached.indexBuffer;
+            this.indexCount = mesh.indexCount;
+            return;
+        }
+
+        const vertexBuffer = this.device.createBuffer({
             size: mesh.vertexData.byteLength,
             usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
         });
-        this.device.queue.writeBuffer(this.vertexBuffer, 0, mesh.vertexData as BufferSource);
+        this.device.queue.writeBuffer(vertexBuffer, 0, mesh.vertexData as BufferSource);
 
-        let indexData = mesh.indexData;
-
-        this.indexBuffer = this.device.createBuffer({
-            size: indexData.byteLength, 
+        const indexBuffer = this.device.createBuffer({
+            size: mesh.indexData.byteLength, 
             usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
         });
-        this.device.queue.writeBuffer(this.indexBuffer, 0, indexData as BufferSource);
+        this.device.queue.writeBuffer(indexBuffer, 0, mesh.indexData as BufferSource);
+
+        this.meshBufferCache.set(mesh, { vertexBuffer, indexBuffer });
         
+        this.vertexBuffer = vertexBuffer;
+        this.indexBuffer = indexBuffer;
         this.indexCount = mesh.indexCount;
+    }
+
+    public clearMeshCache() {
+        for (const cached of this.meshBufferCache.values()) {
+            cached.vertexBuffer.destroy();
+            cached.indexBuffer.destroy();
+        }
+        this.meshBufferCache.clear();
+        this.currentMesh = null;
     }
 
     drawSky(cameraForward: number[], cameraRight: number[], cameraUp: number[]) {
@@ -318,6 +427,39 @@ export class Renderer {
         renderPass.setVertexBuffer(0, this.vertexBuffer);
         renderPass.setIndexBuffer(this.indexBuffer, 'uint32');
         renderPass.drawIndexed(this.indexCount);
+        
+        renderPass.end();
+        this.device.queue.submit([commandEncoder.finish()]);
+    }
+
+    drawSubMesh(mvpMatrix: Float32Array, startIndex: number, indexCount: number) {
+        if (!this.vertexBuffer || !this.indexBuffer || indexCount === 0) {
+            return; 
+        }
+
+        this.device.queue.writeBuffer(this.uniformBuffer, 0, mvpMatrix as BufferSource);
+
+        const commandEncoder = this.device.createCommandEncoder();
+        const textureView = this.context.getCurrentTexture().createView();
+
+        const renderPass = commandEncoder.beginRenderPass({
+            colorAttachments: [{
+                view: textureView,
+                loadOp: 'load',
+                storeOp: 'store'
+            }],
+            depthStencilAttachment: {
+                view: this.depthTexture.createView(),
+                depthLoadOp: 'load',
+                depthStoreOp: 'store'
+            }
+        });
+
+        renderPass.setPipeline(this.pipeline);
+        renderPass.setBindGroup(0, this.bindGroup);
+        renderPass.setVertexBuffer(0, this.vertexBuffer);
+        renderPass.setIndexBuffer(this.indexBuffer, 'uint32');
+        renderPass.drawIndexed(indexCount, 1, startIndex, 0, 0);
         
         renderPass.end();
         this.device.queue.submit([commandEncoder.finish()]);

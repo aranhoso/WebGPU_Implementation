@@ -1,23 +1,59 @@
-import { Mesh } from "../engine/Mesh";
+import { Mesh, SubMesh } from "../engine/Mesh";
+import { MtlLoader, Material } from "./MtlLoader";
+
+export interface ObjLoadResult {
+    mesh: Mesh;
+    materials: Map<string, Material>;
+    mtlPath?: string | undefined;
+}
 
 export class ObjLoader {
 
     static async load(url: string): Promise<Mesh> {
         const response = await fetch(url);
         const text = await response.text();
-        return this.parse(text);
+        
+        const baseDir = url.substring(0, url.lastIndexOf('/') + 1);
+        
+        return this.parse(text, baseDir);
     }
 
-    static parse(text: string): Mesh {
+    static async loadWithMaterials(url: string): Promise<ObjLoadResult> {
+        const response = await fetch(url);
+        const text = await response.text();
+        
+        const baseDir = url.substring(0, url.lastIndexOf('/') + 1);
+        
+        let mtlPath: string | undefined;
+        let materials = new Map<string, Material>();
+        
+        const mtlMatch = text.match(/^mtllib\s+(.+)$/m);
+        if (mtlMatch) {
+            mtlPath = baseDir + mtlMatch[1].trim();
+            materials = await MtlLoader.load(mtlPath);
+            console.log(`Carregados ${materials.size} materiais de ${mtlPath}`);
+        }
+        
+        const mesh = this.parse(text, baseDir);
+        
+        return { mesh, materials, mtlPath };
+    }
+
+    static parse(text: string, baseDir: string = ''): Mesh {
         const positions: number[][] = [];
         const normals: number[][] = [];
         const uvs: number[][] = [];
 
         const finalVertices: number[] = [];
         const finalIndices: number[] = [];
+        const subMeshes: SubMesh[] = [];
 
         const cache: { [key: string]: number } = {};
         let nextIndex = 0;
+
+        let currentMaterial = 'default';
+        let currentMaterialStartIndex = 0;
+        let lastMaterial = 'default';
 
         const lines = text.split('\n');
 
@@ -42,6 +78,21 @@ export class ObjLoader {
                     parseFloat(parts[1] || '0'),
                     parseFloat(parts[2] || '0')
                 ]);
+            } else if (type === 'usemtl') {
+                const newMaterial = parts.slice(1).join(' ');
+                
+                if (finalIndices.length > currentMaterialStartIndex) {
+                    subMeshes.push({
+                        startIndex: currentMaterialStartIndex,
+                        indexCount: finalIndices.length - currentMaterialStartIndex,
+                        materialName: currentMaterial
+                    });
+                }
+                
+                currentMaterial = newMaterial;
+                currentMaterialStartIndex = finalIndices.length;
+                lastMaterial = newMaterial;
+                
             } else if (type === 'f') {
                 const faceVertices = parts.slice(1);
 
@@ -86,6 +137,14 @@ export class ObjLoader {
             }
         }
 
-        return new Mesh(finalVertices, finalIndices);
+        if (finalIndices.length > currentMaterialStartIndex) {
+            subMeshes.push({
+                startIndex: currentMaterialStartIndex,
+                indexCount: finalIndices.length - currentMaterialStartIndex,
+                materialName: currentMaterial
+            });
+        }
+
+        return new Mesh(finalVertices, finalIndices, subMeshes);
     }
 }
