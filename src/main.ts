@@ -74,6 +74,32 @@ const startGame = async () => {
 
         syncCameraToPlayer();
 
+        const forwardSlider = document.getElementById('forward-slider') as HTMLInputElement;
+        const rightSlider = document.getElementById('right-slider') as HTMLInputElement;
+        const upSlider = document.getElementById('up-slider') as HTMLInputElement;
+        const forwardValue = document.getElementById('forward-value') as HTMLElement;
+        const rightValue = document.getElementById('right-value') as HTMLElement;
+        const upValue = document.getElementById('up-value') as HTMLElement;
+
+        if (forwardSlider && forwardValue) {
+            forwardValue.textContent = forwardSlider.value;
+            forwardSlider.addEventListener('input', () => {
+                forwardValue.textContent = forwardSlider.value;
+            });
+        }
+        if (rightSlider && rightValue) {
+            rightValue.textContent = rightSlider.value;
+            rightSlider.addEventListener('input', () => {
+                rightValue.textContent = rightSlider.value;
+            });
+        }
+        if (upSlider && upValue) {
+            upValue.textContent = upSlider.value;
+            upSlider.addEventListener('input', () => {
+                upValue.textContent = upSlider.value;
+            });
+        }
+
         const updateArcticArmsTransform = () => {
             if (!arcticArmsObj) return;
 
@@ -82,39 +108,47 @@ const startGame = async () => {
             const up = camera.getUp();
             const anchor = noclip ? camera.position : playerMovement.getEyePosition();
 
-            const offsetForward = vec3.scale(front, 0.4);
-            const offsetRight = vec3.scale(right, 0.2);
-            const offsetUp = vec3.scale(up, -0.05);
+            const forwardOffset = forwardSlider ? parseFloat(forwardSlider.value) : 0;
+            const rightOffset = rightSlider ? parseFloat(rightSlider.value) : 0;
+            const upOffset = upSlider ? parseFloat(upSlider.value) : -1.64;
+
+            const offsetForward = vec3.scale(front, forwardOffset);
+            const offsetRight = vec3.scale(right, rightOffset);
+            const offsetUp = vec3.scale(up, upOffset);
 
             const finalPos = vec3.add(vec3.add(vec3.add(anchor, offsetForward), offsetRight), offsetUp);
 
-            // Column-major translation matrix for WebGPU (model space -> world space)
+            const r = right;
+            const u = up;
+            const f = front;
+
             arcticArmsObj.modelMatrix = [
-                1, 0, 0, 0,
-                0, 1, 0, 0,
-                0, 0, 1, 0,
+                r[0], r[1], r[2], 0,
+                u[0], u[1], u[2], 0,
+                f[0], f[1], f[2], 0,
                 finalPos[0], finalPos[1], finalPos[2], 1,
             ];
         };
 
         let noclip = false;
-        let altPressed = false;
         let previousNoclip = false;
 
         const speedElement = document.getElementById('speed-display');
         const groundedElement = document.getElementById('grounded-display');
 
+        let noclipKeyPressed = false;
+        
         scene.start((scene, deltaTime) => {
             const wasNoclip = previousNoclip;
 
-            if (input.isKeyPressed('AltLeft')) {
-                if (!altPressed) {
+            if (input.isKeyPressed('KeyN')) {
+                if (!noclipKeyPressed) {
                     noclip = !noclip;
                     console.log(`Noclip: ${noclip ? 'ATIVADO' : 'DESATIVADO'}`);
-                    altPressed = true;
+                    noclipKeyPressed = true;
                 }
             } else {
-                altPressed = false;
+                noclipKeyPressed = false;
             }
 
             const noclipDisabledThisFrame = wasNoclip && !noclip;

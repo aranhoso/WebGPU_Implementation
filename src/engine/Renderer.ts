@@ -62,7 +62,7 @@ export class Renderer {
             },
             primitive: {
                 topology: 'triangle-list',
-                cullMode: 'back' 
+                cullMode: 'none' 
             },
             fragment: {
                 module: shaderModule,
