@@ -20,7 +20,7 @@ export class CollisionSystem {
     private eyeHeight: number;
     
     // angulo maximo para ser considerado um chão
-    private minGroundNormalY: number = 0.7; // +ou- 75 graus
+    private minGroundNormalY: number = 0.4; // +ou- 75 graus
 
     constructor(playerRadius: number = 0.3, playerHeight: number = 1.8, eyeHeight: number = 1.6) {
         this.playerRadius = playerRadius;
@@ -214,13 +214,16 @@ export class CollisionSystem {
         let closestHit: number | null = null;
         
         for (const tri of this.triangles) {
-            if (tri.normal[1] < 0.5) continue;
+            if (tri.normal[1] < 0.2) continue;
             
             const hit = this.rayTriangleIntersection(rayOrigin, rayDir, tri);
             if (hit !== null) {
                 const groundY = rayOrigin[1] + hit * rayDir[1];
-                if (closestHit === null || groundY > closestHit) {
-                    closestHit = groundY;
+                // ignorar superfícies acima da posição atual do jogador
+                if (groundY <= position[1] + 0.001) {
+                    if (closestHit === null || groundY > closestHit) {
+                        closestHit = groundY;
+                    }
                 }
             }
         }
