@@ -251,6 +251,7 @@ export class Renderer {
         });
 
         this.frameStarted = true;
+        this.currentDrawIndex = 0;
     }
 
     public endFrame() {
@@ -275,13 +276,42 @@ export class Renderer {
         this.renderPass.draw(6);
     }
 
+    private uniformBufferPool: GPUBuffer[] = [];
+    private currentDrawIndex: number = 0;
+
+    private getOrCreateUniformBuffer(index: number): GPUBuffer {
+        if (index < this.uniformBufferPool.length) {
+            return this.uniformBufferPool[index];
+        }
+
+        const buffer = this.device.createBuffer({
+            size: 64,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+
+        this.uniformBufferPool.push(buffer);
+        return buffer;
+    }
+
     public drawMeshInFrame(mvpMatrix: Float32Array, startIndex: number = 0, indexCount?: number) {
         if (!this.vertexBuffer || !this.indexBuffer || !this.frameStarted) return;
 
-        this.device.queue.writeBuffer(this.uniformBuffer, 0, mvpMatrix as BufferSource);
+        const buffer = this.getOrCreateUniformBuffer(this.currentDrawIndex);
+        this.currentDrawIndex++;
+
+        this.device.queue.writeBuffer(buffer, 0, mvpMatrix as BufferSource);
+
+        const bindGroup = this.device.createBindGroup({
+            layout: this.pipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: buffer } },
+                { binding: 1, resource: this.sampler },
+                { binding: 2, resource: this.diffuseTexture.createView() }
+            ]
+        });
 
         this.renderPass.setPipeline(this.pipeline);
-        this.renderPass.setBindGroup(0, this.bindGroup);
+        this.renderPass.setBindGroup(0, bindGroup);
         this.renderPass.setVertexBuffer(0, this.vertexBuffer);
         this.renderPass.setIndexBuffer(this.indexBuffer, 'uint32');
         this.renderPass.drawIndexed(indexCount ?? this.indexCount, 1, startIndex, 0, 0);

@@ -86,6 +86,14 @@ export class Camera {
         this.position = [...pos];
     }
 
+    public follow(targetPosition: number[], eyeOffset: number[] = [0, 0, 0]): void {
+        this.position = [
+            targetPosition[0] + eyeOffset[0],
+            targetPosition[1] + eyeOffset[1],
+            targetPosition[2] + eyeOffset[2],
+        ];
+    }
+
     public updateView() {
         const target = vec3.add(this.position, this.front);
         this.viewMatrix = mat4.lookAt(this.position, target, this.up);

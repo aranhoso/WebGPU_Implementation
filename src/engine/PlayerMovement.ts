@@ -47,6 +47,10 @@ export class PlayerMovement {
     public getPosition(): number[] {
         return this.position;
     }
+
+    public getEyePosition(): number[] {
+        return [...this.position];
+    }
     
     public getVelocity(): number[] {
         return this.velocity;

@@ -1,7 +1,7 @@
-import { mat4 } from './engine/Math';
+import { mat4, vec3 } from './engine/Math';
 import { Renderer } from './engine/Renderer';
 import { Camera } from './engine/Camera';
-import { Scene } from './engine/Scene';
+import { Scene, SceneObject } from './engine/Scene';
 import { Input } from './engine/Input';
 import { CollisionSystem } from './engine/Collision';
 import { PlayerMovement } from './engine/PlayerMovement';
@@ -51,20 +51,62 @@ const startGame = async () => {
             throw new Error("Falha ao carregar o objeto Arctic_T");
         }
 
-        camera.position = [-24, 10, 19]; // x y z
+        const arcticArmsObj = await scene.loadObject(
+            'src/assets/Arctic_T_arms/Arcitc_T-arms.obj',
+            'src/assets/Arctic_T/t_arctic.png'
+        );
+
+        if (!arcticArmsObj) {
+            console.warn("Falha ao carregar o objeto Arctic_T-arms");
+        }
+
+        const spawnPosition = [-24, 10, 19];
+        camera.setPosition(spawnPosition);
 
         const playerMovement = new PlayerMovement();
         playerMovement.setCollisionSystem(collision);
-        playerMovement.setPosition([...camera.position]);
+        playerMovement.setPosition(spawnPosition);
         playerMovement.setEyeHeight(1.6);
+
+        const syncCameraToPlayer = () => {
+            camera.follow(playerMovement.getEyePosition());
+        };
+
+        syncCameraToPlayer();
+
+        const updateArcticArmsTransform = () => {
+            if (!arcticArmsObj) return;
+
+            const front = camera.getFront();
+            const right = camera.getRight();
+            const up = camera.getUp();
+            const anchor = noclip ? camera.position : playerMovement.getEyePosition();
+
+            const offsetForward = vec3.scale(front, 0.4);
+            const offsetRight = vec3.scale(right, 0.2);
+            const offsetUp = vec3.scale(up, -0.05);
+
+            const finalPos = vec3.add(vec3.add(vec3.add(anchor, offsetForward), offsetRight), offsetUp);
+
+            // Column-major translation matrix for WebGPU (model space -> world space)
+            arcticArmsObj.modelMatrix = [
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                finalPos[0], finalPos[1], finalPos[2], 1,
+            ];
+        };
 
         let noclip = false;
         let altPressed = false;
+        let previousNoclip = false;
 
         const speedElement = document.getElementById('speed-display');
         const groundedElement = document.getElementById('grounded-display');
 
         scene.start((scene, deltaTime) => {
+            const wasNoclip = previousNoclip;
+
             if (input.isKeyPressed('AltLeft')) {
                 if (!altPressed) {
                     noclip = !noclip;
@@ -73,6 +115,13 @@ const startGame = async () => {
                 }
             } else {
                 altPressed = false;
+            }
+
+            const noclipDisabledThisFrame = wasNoclip && !noclip;
+            if (noclipDisabledThisFrame) {
+                playerMovement.setPosition([...camera.position]);
+                playerMovement.velocity = [0, 0, 0];
+                syncCameraToPlayer();
             }
 
             if (input.isLocked()) {
@@ -104,8 +153,7 @@ const startGame = async () => {
                 const jumpPressed = input.isKeyPressed('Space');
                 
                 playerMovement.update(deltaTime, inputX, inputZ, jumpPressed);
-                
-                camera.setPosition(playerMovement.getPosition());
+                syncCameraToPlayer();
                 
                 if (speedElement) {
                     const speed = playerMovement.getSpeed();
@@ -115,6 +163,10 @@ const startGame = async () => {
                     groundedElement.textContent = `Grounded: ${playerMovement.getIsGrounded() ? 'Yes' : 'No'}`;
                 }
             }
+
+            updateArcticArmsTransform();
+
+            previousNoclip = noclip;
         });
 
     } catch (error) {

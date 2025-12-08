@@ -194,6 +194,7 @@ export class Scene {
         let fpsLastTime = performance.now();
         const fpsElement = document.getElementById('fps-counter');
         const coordsElement = document.getElementById('coords-display');
+        const cameraTrackerElement = document.getElementById('camera-tracker');
 
         const frame = (currentTime: number) => {
             if (!this.isRunning) return;
@@ -214,6 +215,11 @@ export class Scene {
             if (coordsElement) {
                 const pos = this.camera.position;
                 coordsElement.textContent = `Pos: (${pos[0].toFixed(2)}, ${pos[1].toFixed(2)}, ${pos[2].toFixed(2)})`;
+            }
+
+            if (cameraTrackerElement) {
+                const pos = this.camera.position;
+                cameraTrackerElement.textContent = `Camera: (${pos[0].toFixed(2)}, ${pos[1].toFixed(2)}, ${pos[2].toFixed(2)})`;
             }
 
             if (updateCallback) {
