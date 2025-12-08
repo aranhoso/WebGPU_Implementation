@@ -227,6 +227,13 @@ export class CollisionSystem {
                 }
             }
         }
+
+        const infiniteGroundY = 0;
+        if (infiniteGroundY <= position[1] + 0.001) {
+            if (closestHit === null || infiniteGroundY > closestHit) {
+                closestHit = infiniteGroundY;
+            }
+        }
         
         return closestHit;
     }
