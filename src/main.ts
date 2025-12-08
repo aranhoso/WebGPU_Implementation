@@ -7,6 +7,7 @@ import { CollisionSystem } from './engine/Collision';
 import { PlayerMovement } from './engine/PlayerMovement';
 import { TrailSystem } from './engine/TrailSystem';
 import { LadderSystem } from './engine/LadderSystem';
+import { Chronometer } from './engine/Chronometer';
 
 const canvas = document.getElementById('gfx-main') as HTMLCanvasElement;
 
@@ -102,6 +103,24 @@ const startGame = async () => {
         const forwardValue = document.getElementById('forward-value') as HTMLElement;
         const rightValue = document.getElementById('right-value') as HTMLElement;
         const upValue = document.getElementById('up-value') as HTMLElement;
+
+        const chronoDisplay = (() => {
+            const existing = document.getElementById('chronometer-display');
+            if (existing) return existing;
+            const el = document.createElement('div');
+            el.id = 'chronometer-display';
+            el.style.position = 'absolute';
+            el.style.top = '8px';
+            el.style.right = '8px';
+            el.style.padding = '6px 10px';
+            el.style.background = 'rgba(0,0,0,0.35)';
+            el.style.color = '#fff';
+            el.style.fontFamily = 'monospace';
+            el.style.fontSize = '14px';
+            el.style.pointerEvents = 'none';
+            document.body.appendChild(el);
+            return el;
+        })();
 
         const debugInfo = document.getElementById('debug-info') as HTMLElement;
         const armsControls = document.getElementById('arms-controls') as HTMLElement;
@@ -211,6 +230,13 @@ const startGame = async () => {
         const ambientValue = document.getElementById('ambient-value') as HTMLElement;
         const shininessValue = document.getElementById('shininess-value') as HTMLElement;
 
+        const chronometer = new Chronometer(
+            { position: [-18.518, 9.251, 20.083], radius: 2 },
+            { position: [-24.217, 32.206, -8.663], radius: 2 },
+            chronoDisplay,
+            scene
+            );
+
         const syncLighting = () => {
             const dir: [number, number, number] = [
                 parseFloat(lightDirXSlider?.value ?? '1'),
@@ -284,6 +310,7 @@ const startGame = async () => {
         let previousNoclip = false;
 
         let pickKeyPressed = false;
+        let resetKeyPressed = false;
 
         const speedElement = document.getElementById('speed-display');
         const groundedElement = document.getElementById('grounded-display');
@@ -296,6 +323,7 @@ const startGame = async () => {
         
         scene.start((scene, deltaTime) => {
             const wasNoclip = previousNoclip;
+            const interactPressed = input.isKeyPressed('KeyE');
 
             if (input.isKeyPressed('KeyN')) {
                 if (!noclipKeyPressed) {
@@ -305,6 +333,19 @@ const startGame = async () => {
                 }
             } else {
                 noclipKeyPressed = false;
+            }
+
+            if (input.isKeyPressed('KeyR')) {
+                if (!resetKeyPressed) {
+                    chronometer.reset();
+                    playerMovement.setPosition([...spawnPosition]);
+                    playerMovement.velocity = [0, 0, 0];
+                    camera.setPosition([...spawnPosition]);
+                    syncCameraToPlayer();
+                    resetKeyPressed = true;
+                }
+            } else {
+                resetKeyPressed = false;
             }
 
             if (input.isKeyPressed('KeyP')) {
@@ -365,6 +406,9 @@ const startGame = async () => {
                     playerMovement.update(deltaTime, inputX, inputZ, jumpPressed);
                 }
 
+                const eyePos = playerMovement.getEyePosition() as [number, number, number];
+                chronometer.update(eyePos, false, false);
+
                 syncCameraToPlayer();
                 
                 if (speedElement) {
@@ -375,6 +419,10 @@ const startGame = async () => {
                     groundedElement.textContent = `Grounded: ${playerMovement.getIsGrounded() ? 'Yes' : 'No'}`;
                 }
             }
+
+            // chronometer update (runs in both noclip and normal; finish blocked in noclip)
+            const eyePos = playerMovement.getEyePosition() as [number, number, number];
+            chronometer.update(eyePos, interactPressed, uiVisible, false, noclip);
 
             updateArcticArmsTransform(deltaTime);
             const anchor = noclip ? camera.position : playerMovement.getEyePosition();
