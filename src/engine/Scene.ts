@@ -143,10 +143,15 @@ export class Scene {
         this.renderer.beginFrame();
 
         if (this.hasSkybox) {
+            const aspect = this.renderer.canvas.width / this.renderer.canvas.height;
+            const tanHalfFov = Math.tan(this.camera.getFovY() * 0.5);
+            const skyRight = this.camera.getRight().map(v => v * tanHalfFov * aspect);
+            const skyUp = this.camera.getUp().map(v => v * tanHalfFov);
+
             this.renderer.drawSkyboxInFrame(
                 this.camera.getFront(),
-                this.camera.getRight(),
-                this.camera.getUp()
+                skyRight,
+                skyUp
             );
         }
 

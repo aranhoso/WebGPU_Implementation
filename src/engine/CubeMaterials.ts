@@ -29,8 +29,8 @@ export class CubeMapMaterial {
         this.view = this.texture?.createView(viewDescriptor);
 
         const samplerDescriptor: GPUSamplerDescriptor = {
-            addressModeU: "repeat",
-            addressModeV: "repeat",
+            addressModeU: "clamp-to-edge",
+            addressModeV: "clamp-to-edge",
             magFilter: "linear",
             minFilter: "nearest",
             mipmapFilter: "nearest",

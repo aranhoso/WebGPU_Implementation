@@ -6,6 +6,7 @@ export class Camera {
 
     public position: number[] = [0, 2, 5];
 
+    private fovY: number = (90 * Math.PI) / 180;
     private yaw: number = 0;
     private pitch: number = 0;
 
@@ -23,7 +24,11 @@ export class Camera {
     }
 
     public updateProjection(aspectRatio: number) {
-        this.projectionMatrix = mat4.perspective((90 * Math.PI) / 180, aspectRatio, 0.1, 100.0);
+        this.projectionMatrix = mat4.perspective(this.fovY, aspectRatio, 0.1, 100.0);
+    }
+
+    public getFovY(): number {
+        return this.fovY;
     }
 
     public updateRotation(deltaX: number, deltaY: number) {
