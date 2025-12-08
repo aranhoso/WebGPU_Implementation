@@ -1,4 +1,4 @@
-import { BasicShaderCode } from "../shaders/BasicShader";
+import { PhongShaderCode } from "../shaders/PhongShader";
 import { SkyShaderCode } from "../shaders/SkyShader";
 import { Mesh } from "../engine/Mesh";
 import { CubeMapMaterial } from "./CubeMaterials";
@@ -25,6 +25,14 @@ export class Renderer {
     sampler!: GPUSampler;
     diffuseTexture!: GPUTexture;
 
+    private lightDirection: [number, number, number] = [0.16, 1.0, -0.11];
+    private lightIntensity: number = 0.87;
+    private ambientIntensity: number = 0.74;
+    private shininess: number = 4.0;
+
+    private static readonly UNIFORM_FLOAT_COUNT = 28; // 16 (mvp) + 4 (light dir + shininess) + 4 (light color) + 4 (ambient)
+    private static readonly UNIFORM_BUFFER_SIZE = Renderer.UNIFORM_FLOAT_COUNT * 4;
+
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
     }
@@ -44,7 +52,7 @@ export class Renderer {
             alphaMode: 'opaque'
         });
 
-        const shaderModule = this.device.createShaderModule({ code: BasicShaderCode });
+        const shaderModule = this.device.createShaderModule({ code: PhongShaderCode });
 
         this.pipeline = this.device.createRenderPipeline({
             layout: 'auto',
@@ -88,7 +96,7 @@ export class Renderer {
         this.createFallbackTexture();
 
         this.uniformBuffer = this.device.createBuffer({
-            size: 64,
+            size: Renderer.UNIFORM_BUFFER_SIZE,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
 
@@ -193,6 +201,22 @@ export class Renderer {
         this.setTexture(this.fallbackTexture);
     }
 
+    public setLightDirection(dir: number[]) {
+        this.lightDirection = [dir[0], dir[1], dir[2]];
+    }
+
+    public setLightIntensity(intensity: number) {
+        this.lightIntensity = Math.max(0, intensity);
+    }
+
+    public setAmbientIntensity(intensity: number) {
+        this.ambientIntensity = Math.max(0, intensity);
+    }
+
+    public setShininess(value: number) {
+        this.shininess = Math.max(1, value);
+    }
+
     private updateBindGroup() {
         this.bindGroup = this.device.createBindGroup({
             layout: this.pipeline.getBindGroupLayout(0),
@@ -285,12 +309,34 @@ export class Renderer {
         }
 
         const buffer = this.device.createBuffer({
-            size: 64,
+            size: Renderer.UNIFORM_BUFFER_SIZE,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
 
         this.uniformBufferPool.push(buffer);
         return buffer;
+    }
+
+    private normalizeVec3(v: [number, number, number]): [number, number, number] {
+        const len = Math.hypot(v[0], v[1], v[2]);
+        if (len < 1e-6) return [0, 1, 0];
+        return [v[0] / len, v[1] / len, v[2] / len];
+    }
+
+    private buildUniformData(mvpMatrix: Float32Array): Float32Array {
+        const data = new Float32Array(Renderer.UNIFORM_FLOAT_COUNT);
+        data.set(mvpMatrix, 0);
+
+        const dir = this.normalizeVec3(this.lightDirection);
+        data.set([dir[0], dir[1], dir[2], this.shininess], 16);
+
+        const light = this.lightIntensity;
+        data.set([light, light, light, 0.0], 20);
+
+        const ambient = this.ambientIntensity;
+        data.set([ambient, ambient, ambient, 0.0], 24);
+
+        return data;
     }
 
     public drawMeshInFrame(mvpMatrix: Float32Array, startIndex: number = 0, indexCount?: number) {
@@ -299,7 +345,8 @@ export class Renderer {
         const buffer = this.getOrCreateUniformBuffer(this.currentDrawIndex);
         this.currentDrawIndex++;
 
-        this.device.queue.writeBuffer(buffer, 0, mvpMatrix as BufferSource);
+        const uniformData = this.buildUniformData(mvpMatrix);
+        this.device.queue.writeBuffer(buffer, 0, uniformData as BufferSource);
 
         const bindGroup = this.device.createBindGroup({
             layout: this.pipeline.getBindGroupLayout(0),
@@ -322,7 +369,8 @@ export class Renderer {
             return; 
         }
 
-        this.device.queue.writeBuffer(this.uniformBuffer, 0, mvpMatrix as BufferSource);
+        const uniformData = this.buildUniformData(mvpMatrix);
+        this.device.queue.writeBuffer(this.uniformBuffer, 0, uniformData as BufferSource);
 
         const commandEncoder = this.device.createCommandEncoder();
         const textureView = this.context.getCurrentTexture().createView();

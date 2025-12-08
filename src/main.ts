@@ -100,6 +100,49 @@ const startGame = async () => {
             });
         }
 
+        const lightDirXSlider = document.getElementById('lightDirX-slider') as HTMLInputElement;
+        const lightDirYSlider = document.getElementById('lightDirY-slider') as HTMLInputElement;
+        const lightDirZSlider = document.getElementById('lightDirZ-slider') as HTMLInputElement;
+        const lightIntensitySlider = document.getElementById('lightIntensity-slider') as HTMLInputElement;
+        const ambientSlider = document.getElementById('ambient-slider') as HTMLInputElement;
+        const shininessSlider = document.getElementById('shininess-slider') as HTMLInputElement;
+
+        const lightDirXValue = document.getElementById('lightDirX-value') as HTMLElement;
+        const lightDirYValue = document.getElementById('lightDirY-value') as HTMLElement;
+        const lightDirZValue = document.getElementById('lightDirZ-value') as HTMLElement;
+        const lightIntensityValue = document.getElementById('lightIntensity-value') as HTMLElement;
+        const ambientValue = document.getElementById('ambient-value') as HTMLElement;
+        const shininessValue = document.getElementById('shininess-value') as HTMLElement;
+
+        const syncLighting = () => {
+            const dir: [number, number, number] = [
+                parseFloat(lightDirXSlider?.value ?? '1'),
+                parseFloat(lightDirYSlider?.value ?? '1'),
+                parseFloat(lightDirZSlider?.value ?? '1')
+            ];
+
+            renderer.setLightDirection(dir);
+            renderer.setLightIntensity(parseFloat(lightIntensitySlider?.value ?? '1'));
+            renderer.setAmbientIntensity(parseFloat(ambientSlider?.value ?? '0.2'));
+            renderer.setShininess(parseFloat(shininessSlider?.value ?? '64'));
+
+            if (lightDirXValue) lightDirXValue.textContent = dir[0].toFixed(2);
+            if (lightDirYValue) lightDirYValue.textContent = dir[1].toFixed(2);
+            if (lightDirZValue) lightDirZValue.textContent = dir[2].toFixed(2);
+            if (lightIntensityValue) lightIntensityValue.textContent = (lightIntensitySlider ? parseFloat(lightIntensitySlider.value) : 1).toFixed(2);
+            if (ambientValue) ambientValue.textContent = (ambientSlider ? parseFloat(ambientSlider.value) : 0.2).toFixed(2);
+            if (shininessValue) shininessValue.textContent = shininessSlider ? shininessSlider.value : '64';
+        };
+
+        lightDirXSlider?.addEventListener('input', syncLighting);
+        lightDirYSlider?.addEventListener('input', syncLighting);
+        lightDirZSlider?.addEventListener('input', syncLighting);
+        lightIntensitySlider?.addEventListener('input', syncLighting);
+        ambientSlider?.addEventListener('input', syncLighting);
+        shininessSlider?.addEventListener('input', syncLighting);
+
+        syncLighting();
+
         const updateArcticArmsTransform = () => {
             if (!arcticArmsObj) return;
 

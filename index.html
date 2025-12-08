@@ -48,6 +48,43 @@
             color: #00ff00;
             font-size: 14px;
         }
+        #lighting-controls {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            color: #00ff00;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
+            border-radius: 4px;
+            z-index: 1000;
+            pointer-events: auto;
+            min-width: 260px;
+        }
+        #lighting-controls h3 {
+            margin: 0 0 10px 0;
+            color: #00ff00;
+            font-size: 14px;
+        }
+        #lighting-controls .slider-group {
+            margin-bottom: 12px;
+        }
+        #lighting-controls label {
+            display: block;
+            margin-bottom: 4px;
+            color: #00ff00;
+        }
+        #lighting-controls input[type="range"] {
+            width: 100%;
+            margin-bottom: 2px;
+        }
+        #lighting-controls .value {
+            display: inline-block;
+            margin-left: 8px;
+            color: #ffff00;
+            font-weight: bold;
+        }
         #arms-controls .slider-group {
             margin-bottom: 12px;
         }
@@ -98,6 +135,45 @@
                 <span class="value" id="up-value">-1.64</span>
             </label>
             <input type="range" id="up-slider" min="-2" max="2" step="0.01" value="-1.64">
+        </div>
+    </div>
+    <div id="lighting-controls">
+        <h3>Lighting</h3>
+        <div class="slider-group">
+            <label>
+                Light Direction X: <span class="value" id="lightDirX-value">0.16</span>
+            </label>
+            <input type="range" id="lightDirX-slider" min="-1" max="1" step="0.01" value="0.16">
+        </div>
+        <div class="slider-group">
+            <label>
+                Light Direction Y: <span class="value" id="lightDirY-value">1.00</span>
+            </label>
+            <input type="range" id="lightDirY-slider" min="-1" max="1" step="0.01" value="1">
+        </div>
+        <div class="slider-group">
+            <label>
+                Light Direction Z: <span class="value" id="lightDirZ-value">-0.11</span>
+            </label>
+            <input type="range" id="lightDirZ-slider" min="-1" max="1" step="0.01" value="-0.11">
+        </div>
+        <div class="slider-group">
+            <label>
+                Light Intensity: <span class="value" id="lightIntensity-value">0.87</span>
+            </label>
+            <input type="range" id="lightIntensity-slider" min="0" max="3" step="0.01" value="0.87">
+        </div>
+        <div class="slider-group">
+            <label>
+                Ambient Intensity: <span class="value" id="ambient-value">0.74</span>
+            </label>
+            <input type="range" id="ambient-slider" min="0" max="1" step="0.01" value="0.74">
+        </div>
+        <div class="slider-group">
+            <label>
+                Shininess: <span class="value" id="shininess-value">4</span>
+            </label>
+            <input type="range" id="shininess-slider" min="4" max="256" step="1" value="4">
         </div>
     </div>
     <canvas id="gfx-main"></canvas>
