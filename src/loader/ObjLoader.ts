@@ -107,7 +107,7 @@ export class ObjLoader {
                     const triangle = [v1, v2, v3];
 
                     for (const vertString of triangle) {
-                        if (!cache[vertString]) {
+                        if (cache[vertString] === undefined) {
                             const indices = vertString.split('/');
 
                             const posIndex = indices[0] ? parseInt(indices[0]) - 1 : -1;
