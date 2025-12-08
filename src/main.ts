@@ -68,6 +68,9 @@ const startGame = async () => {
         playerMovement.setPosition(spawnPosition);
         playerMovement.setEyeHeight(1.6);
 
+        let lastVy = playerMovement.getVelocity()[1];
+        let armSway = 0;
+
         const syncCameraToPlayer = () => {
             camera.follow(playerMovement.getEyePosition());
         };
@@ -80,6 +83,30 @@ const startGame = async () => {
         const forwardValue = document.getElementById('forward-value') as HTMLElement;
         const rightValue = document.getElementById('right-value') as HTMLElement;
         const upValue = document.getElementById('up-value') as HTMLElement;
+
+        const debugInfo = document.getElementById('debug-info') as HTMLElement;
+        const armsControls = document.getElementById('arms-controls') as HTMLElement;
+        const lightingControls = document.getElementById('lighting-controls') as HTMLElement;
+        const postfxControls = document.getElementById('postfx-controls') as HTMLElement;
+
+        let uiVisible = false;
+        const uiPanels = [debugInfo, armsControls, lightingControls, postfxControls];
+
+        const applyUIVisibility = () => {
+            for (const el of uiPanels) {
+                if (!el) continue;
+                el.style.display = uiVisible ? '' : 'none';
+            }
+        };
+
+        applyUIVisibility();
+
+        window.addEventListener('keydown', (ev) => {
+            if (ev.code === 'Insert') {
+                uiVisible = !uiVisible;
+                applyUIVisibility();
+            }
+        });
 
         if (forwardSlider && forwardValue) {
             forwardValue.textContent = forwardSlider.value;
@@ -99,6 +126,57 @@ const startGame = async () => {
                 upValue.textContent = upSlider.value;
             });
         }
+
+        // CRT / Fisheye controls
+        const fisheyeSlider = document.getElementById('fisheye-slider') as HTMLInputElement;
+        const scanlineSlider = document.getElementById('scanline-slider') as HTMLInputElement;
+        const rgbOffsetSlider = document.getElementById('rgbOffset-slider') as HTMLInputElement;
+        const vignetteSlider = document.getElementById('vignette-slider') as HTMLInputElement;
+        const waveAmpSlider = document.getElementById('waveAmp-slider') as HTMLInputElement;
+        const waveFreqSlider = document.getElementById('waveFreq-slider') as HTMLInputElement;
+        const jitterSlider = document.getElementById('jitter-slider') as HTMLInputElement;
+
+        const fisheyeValue = document.getElementById('fisheye-value') as HTMLElement;
+        const scanlineValue = document.getElementById('scanline-value') as HTMLElement;
+        const rgbOffsetValue = document.getElementById('rgbOffset-value') as HTMLElement;
+        const vignetteValue = document.getElementById('vignette-value') as HTMLElement;
+        const waveAmpValue = document.getElementById('waveAmp-value') as HTMLElement;
+        const waveFreqValue = document.getElementById('waveFreq-value') as HTMLElement;
+        const jitterValue = document.getElementById('jitter-value') as HTMLElement;
+
+        const syncPostFx = () => {
+            const fisheye = parseFloat(fisheyeSlider?.value ?? '0.5');
+            const scan = parseFloat(scanlineSlider?.value ?? '0.175');
+            const rgb = parseFloat(rgbOffsetSlider?.value ?? '0.001');
+            const vig = parseFloat(vignetteSlider?.value ?? '0.3');
+            const wAmp = parseFloat(waveAmpSlider?.value ?? '0.0002');
+            const wFreq = parseFloat(waveFreqSlider?.value ?? '5');
+            const jitter = parseFloat(jitterSlider?.value ?? '0.0003');
+
+            renderer.setFisheyeStrength(fisheye);
+            renderer.setScanLineIntensity(scan);
+            renderer.setRgbOffset(rgb);
+            renderer.setVignetteIntensity(vig);
+            renderer.setWaveAmplitude(wAmp);
+            renderer.setWaveFrequency(wFreq);
+            renderer.setJitterIntensity(jitter);
+
+            if (fisheyeValue) fisheyeValue.textContent = fisheye.toFixed(2);
+            if (scanlineValue) scanlineValue.textContent = scan.toFixed(3);
+            if (rgbOffsetValue) rgbOffsetValue.textContent = rgb.toFixed(4);
+            if (vignetteValue) vignetteValue.textContent = vig.toFixed(2);
+            if (waveAmpValue) waveAmpValue.textContent = wAmp.toFixed(4);
+            if (waveFreqValue) waveFreqValue.textContent = wFreq.toFixed(2);
+            if (jitterValue) jitterValue.textContent = jitter.toFixed(4);
+        };
+
+        fisheyeSlider?.addEventListener('input', syncPostFx);
+        scanlineSlider?.addEventListener('input', syncPostFx);
+        rgbOffsetSlider?.addEventListener('input', syncPostFx);
+        vignetteSlider?.addEventListener('input', syncPostFx);
+        waveAmpSlider?.addEventListener('input', syncPostFx);
+        waveFreqSlider?.addEventListener('input', syncPostFx);
+        jitterSlider?.addEventListener('input', syncPostFx);
 
         const lightDirXSlider = document.getElementById('lightDirX-slider') as HTMLInputElement;
         const lightDirYSlider = document.getElementById('lightDirY-slider') as HTMLInputElement;
@@ -142,8 +220,9 @@ const startGame = async () => {
         shininessSlider?.addEventListener('input', syncLighting);
 
         syncLighting();
+        syncPostFx();
 
-        const updateArcticArmsTransform = () => {
+        const updateArcticArmsTransform = (dt: number = 0) => {
             if (!arcticArmsObj) return;
 
             const front = camera.getFront();
@@ -153,13 +232,22 @@ const startGame = async () => {
 
             const forwardOffset = forwardSlider ? parseFloat(forwardSlider.value) : 0;
             const rightOffset = rightSlider ? parseFloat(rightSlider.value) : 0;
-            const upOffset = upSlider ? parseFloat(upSlider.value) : -1.64;
+            const upOffset = upSlider ? parseFloat(upSlider.value) : -1.85;
 
             const offsetForward = vec3.scale(front, forwardOffset);
             const offsetRight = vec3.scale(right, rightOffset);
             const offsetUp = vec3.scale(up, upOffset);
 
             const finalPos = vec3.add(vec3.add(vec3.add(anchor, offsetForward), offsetRight), offsetUp);
+
+            const vy = playerMovement.getVelocity()[1];
+            const accelY = dt > 0 ? (vy - lastVy) / dt : 0;
+            const targetSway = Math.max(-0.15, Math.min(0.15, accelY * 0.01));
+            const lerpFactor = Math.min(1, dt * 10);
+            armSway = armSway + (targetSway - armSway) * lerpFactor;
+            armSway = Math.max(-0.15, Math.min(0.15, armSway));
+            finalPos[1] += armSway;
+            lastVy = vy;
 
             const r = right;
             const u = up;
@@ -241,7 +329,7 @@ const startGame = async () => {
                 }
             }
 
-            updateArcticArmsTransform();
+            updateArcticArmsTransform(deltaTime);
 
             previousNoclip = noclip;
         });

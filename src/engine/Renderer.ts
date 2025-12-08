@@ -1,5 +1,6 @@
 import { PhongShaderCode } from "../shaders/PhongShader";
 import { SkyShaderCode } from "../shaders/SkyShader";
+import { CrtShaderCode } from "../shaders/CrtShader";
 import { Mesh } from "../engine/Mesh";
 import { CubeMapMaterial } from "./CubeMaterials";
 
@@ -33,6 +34,24 @@ export class Renderer {
     private static readonly UNIFORM_FLOAT_COUNT = 28; // 16 (mvp) + 4 (light dir + shininess) + 4 (light color) + 4 (ambient)
     private static readonly UNIFORM_BUFFER_SIZE = Renderer.UNIFORM_FLOAT_COUNT * 4;
 
+    private canvasFormat!: GPUTextureFormat;
+    private colorTexture!: GPUTexture;
+    private colorTextureView!: GPUTextureView;
+
+    private postProcessPipeline!: GPURenderPipeline;
+    private postProcessBindGroup!: GPUBindGroup;
+    private postProcessSampler!: GPUSampler;
+    private postProcessUniform!: GPUBuffer;
+    private postProcessTime: number = 0;
+
+    private fisheyeStrength = 1.0;
+    private scanLineIntensity = 0.025;
+    private rgbOffset = 0.0018;
+    private vignetteIntensity = 0.03;
+    private waveAmplitude = 0.0002;
+    private waveFrequency = 14.7;
+    private jitterIntensity = 0.0;
+
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
     }
@@ -44,11 +63,11 @@ export class Renderer {
         this.device = await adapter.requestDevice();
 
         this.context = this.canvas.getContext('webgpu') as GPUCanvasContext;
-        const format = navigator.gpu.getPreferredCanvasFormat();
+        this.canvasFormat = navigator.gpu.getPreferredCanvasFormat();
 
         this.context.configure({
             device: this.device,
-            format: format,
+            format: this.canvasFormat,
             alphaMode: 'opaque'
         });
 
@@ -75,12 +94,30 @@ export class Renderer {
             fragment: {
                 module: shaderModule,
                 entryPoint: 'fs_main',
-                targets: [{ format: format }]
+                targets: [{ format: this.canvasFormat }]
             },
             depthStencil: {
                 depthWriteEnabled: true,
                 depthCompare: 'less',
                 format: 'depth24plus',
+            }
+        });
+
+        const crtShaderModule = this.device.createShaderModule({ code: CrtShaderCode });
+
+        this.postProcessPipeline = this.device.createRenderPipeline({
+            layout: 'auto',
+            vertex: {
+                module: crtShaderModule,
+                entryPoint: 'vs_main'
+            },
+            fragment: {
+                module: crtShaderModule,
+                entryPoint: 'fs_main',
+                targets: [{ format: this.canvasFormat }]
+            },
+            primitive: {
+                topology: 'triangle-list'
             }
         });
 
@@ -94,6 +131,19 @@ export class Renderer {
         });
 
         this.createFallbackTexture();
+
+        this.createRenderTargets();
+        this.postProcessSampler = this.device.createSampler({
+            magFilter: 'linear',
+            minFilter: 'linear',
+            addressModeU: 'clamp-to-edge',
+            addressModeV: 'clamp-to-edge'
+        });
+        this.postProcessUniform = this.device.createBuffer({
+            size: 48,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+        this.updatePostProcessBindGroup();
 
         this.uniformBuffer = this.device.createBuffer({
             size: Renderer.UNIFORM_BUFFER_SIZE,
@@ -217,6 +267,38 @@ export class Renderer {
         this.shininess = Math.max(1, value);
     }
 
+    public setPostProcessTime(timeSeconds: number) {
+        this.postProcessTime = timeSeconds;
+    }
+
+    public setFisheyeStrength(value: number) {
+        this.fisheyeStrength = Math.max(0, value);
+    }
+
+    public setScanLineIntensity(value: number) {
+        this.scanLineIntensity = Math.max(0, value);
+    }
+
+    public setRgbOffset(value: number) {
+        this.rgbOffset = Math.max(0, value);
+    }
+
+    public setVignetteIntensity(value: number) {
+        this.vignetteIntensity = Math.max(0, value);
+    }
+
+    public setWaveAmplitude(value: number) {
+        this.waveAmplitude = Math.max(0, value);
+    }
+
+    public setWaveFrequency(value: number) {
+        this.waveFrequency = Math.max(0, value);
+    }
+
+    public setJitterIntensity(value: number) {
+        this.jitterIntensity = Math.max(0, value);
+    }
+
     private updateBindGroup() {
         this.bindGroup = this.device.createBindGroup({
             layout: this.pipeline.getBindGroupLayout(0),
@@ -224,6 +306,31 @@ export class Renderer {
                 { binding: 0, resource: { buffer: this.uniformBuffer } }, // uniforms
                 { binding: 1, resource: this.sampler }, // sampler
                 { binding: 2, resource: this.diffuseTexture.createView() } // textura
+            ]
+        });
+    }
+
+    private createRenderTargets() {
+        if (this.colorTexture) this.colorTexture.destroy();
+
+        this.colorTexture = this.device.createTexture({
+            size: [this.canvas.width, this.canvas.height],
+            format: this.canvasFormat,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+        });
+
+        this.colorTextureView = this.colorTexture.createView();
+    }
+
+    private updatePostProcessBindGroup() {
+        if (!this.postProcessPipeline || !this.colorTextureView || !this.postProcessSampler || !this.postProcessUniform) return;
+
+        this.postProcessBindGroup = this.device.createBindGroup({
+            layout: this.postProcessPipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: this.colorTextureView },
+                { binding: 1, resource: this.postProcessSampler },
+                { binding: 2, resource: { buffer: this.postProcessUniform } }
             ]
         });
     }
@@ -242,12 +349,15 @@ export class Renderer {
             this.canvas.height = newHeight;
 
             if (this.depthTexture) this.depthTexture.destroy();
-            
+
             this.depthTexture = this.device.createTexture({
                 size: [this.canvas.width, this.canvas.height],
                 format: 'depth24plus',
                 usage: GPUTextureUsage.RENDER_ATTACHMENT
             });
+
+            this.createRenderTargets();
+            this.updatePostProcessBindGroup();
         }
     }
 
@@ -256,8 +366,13 @@ export class Renderer {
     private frameStarted: boolean = false;
 
     public beginFrame() {
+        if (!this.colorTexture) {
+            this.createRenderTargets();
+            this.updatePostProcessBindGroup();
+        }
+
         this.commandEncoder = this.device.createCommandEncoder();
-        const textureView = this.context.getCurrentTexture().createView();
+        const textureView = this.colorTextureView;
 
         this.renderPass = this.commandEncoder.beginRenderPass({
             colorAttachments: [{
@@ -274,6 +389,8 @@ export class Renderer {
             }
         });
 
+        this.updatePostProcessUniforms();
+
         this.frameStarted = true;
         this.currentDrawIndex = 0;
     }
@@ -282,6 +399,22 @@ export class Renderer {
         if (!this.frameStarted) return;
         
         this.renderPass.end();
+        const swapView = this.context.getCurrentTexture().createView();
+
+        const postPass = this.commandEncoder.beginRenderPass({
+            colorAttachments: [{
+                view: swapView,
+                clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+                loadOp: 'clear',
+                storeOp: 'store'
+            }]
+        });
+
+        postPass.setPipeline(this.postProcessPipeline);
+        postPass.setBindGroup(0, this.postProcessBindGroup);
+        postPass.draw(3);
+        postPass.end();
+
         this.device.queue.submit([this.commandEncoder.finish()]);
         this.frameStarted = false;
     }
@@ -337,6 +470,28 @@ export class Renderer {
         data.set([ambient, ambient, ambient, 0.0], 24);
 
         return data;
+    }
+
+    private updatePostProcessUniforms() {
+        if (!this.postProcessUniform) return;
+
+        const data = new Float32Array(12);
+        data[0] = this.canvas.width;
+        data[1] = this.canvas.height;
+        data[2] = this.postProcessTime;
+        data[3] = this.fisheyeStrength;
+
+        data[4] = this.scanLineIntensity;
+        data[5] = this.rgbOffset;
+        data[6] = this.vignetteIntensity;
+        data[7] = this.waveAmplitude;
+
+        data[8] = this.waveFrequency;
+        data[9] = this.jitterIntensity;
+        data[10] = 0.0;
+        data[11] = 0.0;
+
+        this.device.queue.writeBuffer(this.postProcessUniform, 0, data as BufferSource);
     }
 
     public drawMeshInFrame(mvpMatrix: Float32Array, startIndex: number = 0, indexCount?: number) {

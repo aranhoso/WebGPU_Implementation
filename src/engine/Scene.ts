@@ -201,6 +201,7 @@ export class Scene {
 
             const deltaTime = (currentTime - lastTime) / 1000;
             lastTime = currentTime;
+            this.renderer.setPostProcessTime(currentTime / 1000);
 
             frameCount++;
             if (currentTime - fpsLastTime >= 1000) {
