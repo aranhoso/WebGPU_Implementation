@@ -20,6 +20,7 @@ export class Scene {
     private objects: SceneObject[] = [];
     private isRunning: boolean = false;
     private hasSkybox: boolean = false;
+    private afterRender?: (renderer: Renderer, camera: Camera) => void;
 
     constructor(renderer: Renderer, camera: Camera) {
         this.renderer = renderer;
@@ -133,6 +134,10 @@ export class Scene {
         return this.renderer;
     }
 
+    public setAfterRender(callback: (renderer: Renderer, camera: Camera) => void): void {
+        this.afterRender = callback;
+    }
+
 
     public update(deltaTime: number): void {
         // provisorio
@@ -180,6 +185,10 @@ export class Scene {
                 }
                 this.renderer.drawMeshInFrame(mvpArray);
             }
+        }
+
+        if (this.afterRender) {
+            this.afterRender(this.renderer, this.camera);
         }
         this.renderer.endFrame();
     }

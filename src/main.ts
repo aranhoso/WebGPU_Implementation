@@ -5,6 +5,7 @@ import { Scene, SceneObject } from './engine/Scene';
 import { Input } from './engine/Input';
 import { CollisionSystem } from './engine/Collision';
 import { PlayerMovement } from './engine/PlayerMovement';
+import { TrailSystem } from './engine/TrailSystem';
 
 const canvas = document.getElementById('gfx-main') as HTMLCanvasElement;
 
@@ -67,6 +68,14 @@ const startGame = async () => {
         playerMovement.setCollisionSystem(collision);
         playerMovement.setPosition(spawnPosition);
         playerMovement.setEyeHeight(1.6);
+
+        const trailSystem = new TrailSystem(renderer, () => camera, {
+            ttl: 0.6,
+            spawnInterval: 0.015,
+            yOffset: -2,
+            movementEpsilon: 0.01,
+            maxPoints: 256
+        });
 
         let lastVy = playerMovement.getVelocity()[1];
         let armSway = 0;
@@ -268,6 +277,10 @@ const startGame = async () => {
         const groundedElement = document.getElementById('grounded-display');
 
         let noclipKeyPressed = false;
+
+        scene.setAfterRender(() => {
+            trailSystem.render();
+        });
         
         scene.start((scene, deltaTime) => {
             const wasNoclip = previousNoclip;
@@ -330,6 +343,8 @@ const startGame = async () => {
             }
 
             updateArcticArmsTransform(deltaTime);
+            const anchor = noclip ? camera.position : playerMovement.getEyePosition();
+            trailSystem.update(deltaTime, anchor);
 
             previousNoclip = noclip;
         });

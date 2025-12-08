@@ -1,6 +1,7 @@
 import { PhongShaderCode } from "../shaders/PhongShader";
 import { SkyShaderCode } from "../shaders/SkyShader";
 import { CrtShaderCode } from "../shaders/CrtShader";
+import { TrailShaderCode } from "../shaders/TrailShader";
 import { Mesh } from "../engine/Mesh";
 import { CubeMapMaterial } from "./CubeMaterials";
 
@@ -51,6 +52,15 @@ export class Renderer {
     private waveAmplitude = 0.0002;
     private waveFrequency = 14.7;
     private jitterIntensity = 0.0;
+
+    // trail
+    private trailPipeline!: GPURenderPipeline;
+    private trailBindGroup!: GPUBindGroup;
+    private trailUniform!: GPUBuffer;
+    private trailVertexBuffer!: GPUBuffer;
+    private trailInstanceBuffer!: GPUBuffer;
+    private trailInstanceCapacity: number = 0;
+    private trailInstanceCount: number = 0;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -121,6 +131,41 @@ export class Renderer {
             }
         });
 
+        const trailShaderModule = this.device.createShaderModule({ code: TrailShaderCode });
+        this.trailPipeline = this.device.createRenderPipeline({
+            layout: 'auto',
+            vertex: {
+                module: trailShaderModule,
+                entryPoint: 'vs_main',
+                buffers: [
+                    {
+                        arrayStride: 8,
+                        stepMode: 'vertex',
+                        attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }]
+                    },
+                    {
+                        arrayStride: 16,
+                        stepMode: 'instance',
+                        attributes: [
+                            { shaderLocation: 1, offset: 0, format: 'float32x3' },
+                            { shaderLocation: 2, offset: 12, format: 'float32' }
+                        ]
+                    }
+                ]
+            },
+            fragment: {
+                module: trailShaderModule,
+                entryPoint: 'fs_main',
+                targets: [{ format: this.canvasFormat }]
+            },
+            primitive: { topology: 'triangle-list', cullMode: 'none' },
+            depthStencil: {
+                depthWriteEnabled: false,
+                depthCompare: 'less-equal',
+                format: 'depth24plus'
+            }
+        });
+
         this.sampler = this.device.createSampler({
             magFilter: 'linear',
             minFilter: 'linear',
@@ -144,6 +189,26 @@ export class Renderer {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
         this.updatePostProcessBindGroup();
+
+        // Trail resources
+        const quadData = new Float32Array([
+            -1, -1,
+             1, -1,
+            -1,  1,
+            -1,  1,
+             1, -1,
+             1,  1,
+        ]);
+        this.trailVertexBuffer = this.device.createBuffer({
+            size: quadData.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        });
+        this.device.queue.writeBuffer(this.trailVertexBuffer, 0, quadData);
+
+        this.trailUniform = this.device.createBuffer({
+            size: 16 * 4 * 2,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
 
         this.uniformBuffer = this.device.createBuffer({
             size: Renderer.UNIFORM_BUFFER_SIZE,
@@ -335,6 +400,15 @@ export class Renderer {
         });
     }
 
+    private ensureTrailBindGroup() {
+        this.trailBindGroup = this.device.createBindGroup({
+            layout: this.trailPipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: this.trailUniform } }
+            ]
+        });
+    }
+
     public clearBindGroupCache() {
         this.bindGroupCache.clear();
     }
@@ -472,6 +546,15 @@ export class Renderer {
         return data;
     }
 
+    private updateTrailUniform(viewProj: Float32Array, right: number[], up: number[], ttl: number) {
+        const data = new Float32Array(32); // 4x4 + 3 vec4
+        data.set(viewProj, 0);
+        data.set([right[0], right[1], right[2], 0.6], 16);
+        data.set([up[0], up[1], up[2], ttl], 20);
+        data.set([0.2, 1.0, 0.9, 0.6], 24);
+        this.device.queue.writeBuffer(this.trailUniform, 0, data as BufferSource);
+    }
+
     private updatePostProcessUniforms() {
         if (!this.postProcessUniform) return;
 
@@ -492,6 +575,37 @@ export class Renderer {
         data[11] = 0.0;
 
         this.device.queue.writeBuffer(this.postProcessUniform, 0, data as BufferSource);
+    }
+
+    public drawTrailInFrame(instances: Float32Array, instanceCount: number, viewProj: Float32Array, right: number[], up: number[], ttl: number) {
+        if (!this.frameStarted || instanceCount === 0) return;
+
+        const neededSize = instances.byteLength;
+        if (!this.trailInstanceBuffer || neededSize > this.trailInstanceCapacity) {
+            if (this.trailInstanceBuffer) this.trailInstanceBuffer.destroy();
+            const newSize = Math.max(neededSize, 1024 * 4);
+            this.trailInstanceBuffer = this.device.createBuffer({
+                size: newSize,
+                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+            });
+            this.trailInstanceCapacity = newSize;
+        }
+
+        this.device.queue.writeBuffer(
+            this.trailInstanceBuffer,
+            0,
+            instances.buffer,
+            instances.byteOffset,
+            instances.byteLength
+        );
+        this.updateTrailUniform(viewProj, right, up, ttl);
+        this.ensureTrailBindGroup();
+
+        this.renderPass.setPipeline(this.trailPipeline);
+        this.renderPass.setBindGroup(0, this.trailBindGroup);
+        this.renderPass.setVertexBuffer(0, this.trailVertexBuffer);
+        this.renderPass.setVertexBuffer(1, this.trailInstanceBuffer);
+        this.renderPass.draw(6, instanceCount);
     }
 
     public drawMeshInFrame(mvpMatrix: Float32Array, startIndex: number = 0, indexCount?: number) {

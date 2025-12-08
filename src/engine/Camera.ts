@@ -120,6 +120,12 @@ export class Camera {
         return this.up;
     }
 
+    public getViewProjectionMatrix(): Float32Array {
+        this.updateView();
+        const vp = mat4.multiply(this.projectionMatrix, this.viewMatrix);
+        return new Float32Array(vp);
+    }
+
     // função só pra rotacionar a camera pra ver o cubemap
     public orbit(target: number[], angle: number, axis: 'x' | 'y' = 'y') {
         const offset = vec3.subtract(this.position, target);
