@@ -6,6 +6,7 @@ import { Input } from './engine/Input';
 import { CollisionSystem } from './engine/Collision';
 import { PlayerMovement } from './engine/PlayerMovement';
 import { TrailSystem } from './engine/TrailSystem';
+import { LadderSystem } from './engine/LadderSystem';
 
 const canvas = document.getElementById('gfx-main') as HTMLCanvasElement;
 
@@ -42,6 +43,15 @@ const startGame = async () => {
         if (mapObj && mapObj.mesh) {
             collision.loadMeshCollision(mapObj.mesh);
         }
+
+        const ladderSystem = new LadderSystem();
+        ladderSystem.addLadderFromCorners(
+            [37.693, 9.810, 6.950], //bottom right
+            [38.289, 9.847, 7.781], //bottom left
+            [38.331, 18.000, 7.834], //top left
+            [37.835, 18.000, 7.213], //top right
+            { thickness: 0.35 }
+        );
 
         const arcticObj = await scene.loadObject(
             'src/assets/Arctic_T/Arctic_T.obj',
@@ -273,6 +283,8 @@ const startGame = async () => {
         let noclip = false;
         let previousNoclip = false;
 
+        let pickKeyPressed = false;
+
         const speedElement = document.getElementById('speed-display');
         const groundedElement = document.getElementById('grounded-display');
 
@@ -293,6 +305,23 @@ const startGame = async () => {
                 }
             } else {
                 noclipKeyPressed = false;
+            }
+
+            if (input.isKeyPressed('KeyP')) {
+                if (!pickKeyPressed) {
+                    const origin = [...camera.position];
+                    const dir = camera.getFront();
+                    const hit = collision.raycast(origin, dir, 4000);
+                    if (hit) {
+                        const p = hit.point;
+                        console.log(`Look hit: (${p[0].toFixed(3)}, ${p[1].toFixed(3)}, ${p[2].toFixed(3)}) dist=${hit.distance.toFixed(2)}`);
+                    } else {
+                        console.log('Look hit: none');
+                    }
+                    pickKeyPressed = true;
+                }
+            } else {
+                pickKeyPressed = false;
             }
 
             const noclipDisabledThisFrame = wasNoclip && !noclip;
@@ -320,17 +349,22 @@ const startGame = async () => {
                 // modo normal
                 playerMovement.updateDirections(camera.getFront(), camera.getRight());
                 
-                let inputX = 0;
-                let inputZ = 0;
-                
-                if (input.isKeyPressed('KeyW')) inputZ += 1;
-                if (input.isKeyPressed('KeyS')) inputZ -= 1;
-                if (input.isKeyPressed('KeyA')) inputX -= 1;
-                if (input.isKeyPressed('KeyD')) inputX += 1;
-                
-                const jumpPressed = input.isKeyPressed('Space');
-                
-                playerMovement.update(deltaTime, inputX, inputZ, jumpPressed);
+                const onLadder = ladderSystem.update(deltaTime, playerMovement, input, collision);
+
+                if (!onLadder) {
+                    let inputX = 0;
+                    let inputZ = 0;
+                    
+                    if (input.isKeyPressed('KeyW')) inputZ += 1;
+                    if (input.isKeyPressed('KeyS')) inputZ -= 1;
+                    if (input.isKeyPressed('KeyA')) inputX -= 1;
+                    if (input.isKeyPressed('KeyD')) inputX += 1;
+                    
+                    const jumpPressed = input.isKeyPressed('Space');
+                    
+                    playerMovement.update(deltaTime, inputX, inputZ, jumpPressed);
+                }
+
                 syncCameraToPlayer();
                 
                 if (speedElement) {

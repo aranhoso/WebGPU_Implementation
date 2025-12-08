@@ -171,8 +171,9 @@ export class PlayerMovement {
         }
         
         let wishdir = this.getWishDirection(inputX, inputZ);
-        const wishspeed = vec3.length(wishdir) * this.moveSpeed;
-        wishdir = vec3.normalize(wishdir);
+        const wishlen = vec3.length(wishdir);
+        const wishspeed = Math.min(1, wishlen) * this.moveSpeed; // clamp diagonal speed
+        wishdir = wishlen > 0 ? vec3.normalize(wishdir) : [0, 0, 0];
         
         this.accelerate(wishdir, wishspeed, this.runAcceleration, deltaTime);
         
@@ -187,8 +188,9 @@ export class PlayerMovement {
     
     private airMove(deltaTime: number, inputX: number, inputZ: number): void {
         let wishdir = this.getWishDirection(inputX, inputZ);
-        let wishspeed = vec3.length(wishdir) * this.moveSpeed;
-        wishdir = vec3.normalize(wishdir);
+        const wishlen = vec3.length(wishdir);
+        let wishspeed = Math.min(1, wishlen) * this.moveSpeed; // clamp diagonal speed
+        wishdir = wishlen > 0 ? vec3.normalize(wishdir) : [0, 0, 0];
         
         let accel: number;
         const velDotWish = this.dot2D(this.velocity, wishdir);

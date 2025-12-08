@@ -238,6 +238,41 @@ export class CollisionSystem {
         return closestHit;
     }
 
+    public raycast(origin: number[], direction: number[], maxDistance: number = 2000): { point: number[], distance: number, normal: number[] } | null {
+        const dir = vec3.normalize(direction);
+        let bestT = maxDistance;
+        let bestHit: { point: number[], distance: number, normal: number[] } | null = null;
+
+        for (const tri of this.triangles) {
+            const t = this.rayTriangleIntersection(origin, dir, tri);
+            if (t !== null && t > 0 && t < bestT) {
+                bestT = t;
+                const point = [
+                    origin[0] + dir[0] * t,
+                    origin[1] + dir[1] * t,
+                    origin[2] + dir[2] * t,
+                ];
+                bestHit = { point, distance: t, normal: tri.normal };
+            }
+        }
+
+        const EPS = 1e-5;
+        if (Math.abs(dir[1]) > EPS) {
+            const tPlane = (0 - origin[1]) / dir[1];
+            if (tPlane > 0 && tPlane < bestT && tPlane < maxDistance) {
+                bestT = tPlane;
+                const point = [
+                    origin[0] + dir[0] * tPlane,
+                    origin[1] + dir[1] * tPlane,
+                    origin[2] + dir[2] * tPlane,
+                ];
+                bestHit = { point, distance: tPlane, normal: [0, 1, 0] };
+            }
+        }
+
+        return bestHit;
+    }
+
     // Moller–Trumbore
     private rayTriangleIntersection(
         rayOrigin: number[],
