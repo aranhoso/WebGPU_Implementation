@@ -223,9 +223,10 @@ export class Scene {
         const coordsElement = document.getElementById('coords-display');
         const cameraTrackerElement = document.getElementById('camera-tracker');
 
-        const frame = (currentTime: number) => {
+        const frame = () => {
             if (!this.isRunning) return;
 
+            const currentTime = performance.now();
             const deltaTime = (currentTime - lastTime) / 1000;
             lastTime = currentTime;
             this.renderer.setPostProcessTime(currentTime / 1000);
@@ -258,11 +259,12 @@ export class Scene {
 
             this.render();
 
-            requestAnimationFrame(frame);
+            // Use setTimeout(0) for unlimited FPS instead of requestAnimationFrame
+            setTimeout(frame, 0);
         };
 
-        console.log("Iniciando Loop de Renderização...");
-        requestAnimationFrame(frame);
+        console.log("Iniciando Loop de Renderização (Unlimited FPS)...");
+        frame();
     }
 
     public stop(): void {
