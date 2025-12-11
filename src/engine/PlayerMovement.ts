@@ -33,6 +33,10 @@ export class PlayerMovement {
     private stepHeight: number = 0.1; // altura max do degrau que o personagem pode subir
     
     private collision: CollisionSystem | null = null;
+
+    private readonly _tempNewPos: number[] = [0, 0, 0];
+    private readonly _tempEyePos: number[] = [0, 0, 0];
+    private readonly _tempWishDir: number[] = [0, 0, 0];
     
     constructor() {}
     
@@ -41,7 +45,9 @@ export class PlayerMovement {
     }
     
     public setPosition(pos: number[]): void {
-        this.position = [...pos];
+        this.position[0] = pos[0];
+        this.position[1] = pos[1];
+        this.position[2] = pos[2];
     }
     
     public getPosition(): number[] {
@@ -49,7 +55,10 @@ export class PlayerMovement {
     }
 
     public getEyePosition(): number[] {
-        return [...this.position];
+        this._tempEyePos[0] = this.position[0];
+        this._tempEyePos[1] = this.position[1];
+        this._tempEyePos[2] = this.position[2];
+        return this._tempEyePos;
     }
     
     public getVelocity(): number[] {

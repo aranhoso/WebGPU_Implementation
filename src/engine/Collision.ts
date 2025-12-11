@@ -13,6 +13,10 @@ export interface AABB {
     max: number[];
 }
 
+interface SpatialCell {
+    triangles: Triangle[];
+}
+
 export class CollisionSystem {
     private triangles: Triangle[] = [];
     private playerRadius: number;
@@ -22,6 +26,18 @@ export class CollisionSystem {
     // angulo maximo para ser considerado um chão
     private minGroundNormalY: number = 0.4; // +ou- 75 graus
 
+    // particionamento espacial 
+    private spatialGrid: Map<string, SpatialCell> = new Map();
+    private cellSize: number = 8;
+    private gridMin: number[] = [0, 0, 0];
+    private gridMax: number[] = [0, 0, 0];
+
+    private readonly _tempVec1: number[] = [0, 0, 0];
+    private readonly _tempVec2: number[] = [0, 0, 0];
+    private readonly _tempVec3: number[] = [0, 0, 0];
+    private readonly _queriedCells: Set<string> = new Set();
+    private readonly _nearbyTriangles: Triangle[] = [];
+
     constructor(playerRadius: number = 0.3, playerHeight: number = 1.8, eyeHeight: number = 1.6) {
         this.playerRadius = playerRadius;
         this.playerHeight = playerHeight;
@@ -30,12 +46,16 @@ export class CollisionSystem {
 
     public loadMeshCollision(mesh: Mesh): void {
         this.triangles = [];
+        this.spatialGrid.clear();
         
         const vertices = mesh.vertexData;
         const indices = mesh.indexData;
         
         // Cada vértice tem 8 floats: 3 pos + 2 uv + 3 normal
         const stride = 8;
+
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
         
         for (let i = 0; i < indices.length; i += 3) {
             const i0 = indices[i];
@@ -63,16 +83,110 @@ export class CollisionSystem {
             const edge2 = vec3.subtract(v2, v0);
             const normal = vec3.normalize(vec3.cross(edge1, edge2));
             
-            this.triangles.push({ v0, v1, v2, normal });
+            const tri: Triangle = { v0, v1, v2, normal };
+            this.triangles.push(tri);
+
+            const triMinX = Math.min(v0[0], v1[0], v2[0]);
+            const triMinY = Math.min(v0[1], v1[1], v2[1]);
+            const triMinZ = Math.min(v0[2], v1[2], v2[2]);
+            const triMaxX = Math.max(v0[0], v1[0], v2[0]);
+            const triMaxY = Math.max(v0[1], v1[1], v2[1]);
+            const triMaxZ = Math.max(v0[2], v1[2], v2[2]);
+
+            minX = Math.min(minX, triMinX);
+            minY = Math.min(minY, triMinY);
+            minZ = Math.min(minZ, triMinZ);
+            maxX = Math.max(maxX, triMaxX);
+            maxY = Math.max(maxY, triMaxY);
+            maxZ = Math.max(maxZ, triMaxZ);
+        }
+
+        this.gridMin = [minX, minY, minZ];
+        this.gridMax = [maxX, maxY, maxZ];
+
+        for (const tri of this.triangles) {
+            this.insertTriangleIntoGrid(tri);
         }
         
-        console.log(`CollisionSystem: Carregados ${this.triangles.length} triângulos para colisão`);
+        console.log(`CollisionSystem: Carregados ${this.triangles.length} triângulos para colisão (grid cells: ${this.spatialGrid.size})`);
+    }
+
+    private getCellKey(x: number, y: number, z: number): string {
+        const cx = Math.floor(x / this.cellSize);
+        const cy = Math.floor(y / this.cellSize);
+        const cz = Math.floor(z / this.cellSize);
+        return `${cx},${cy},${cz}`;
+    }
+
+    private insertTriangleIntoGrid(tri: Triangle): void {
+        const { v0, v1, v2 } = tri;
+        const minX = Math.min(v0[0], v1[0], v2[0]);
+        const minY = Math.min(v0[1], v1[1], v2[1]);
+        const minZ = Math.min(v0[2], v1[2], v2[2]);
+        const maxX = Math.max(v0[0], v1[0], v2[0]);
+        const maxY = Math.max(v0[1], v1[1], v2[1]);
+        const maxZ = Math.max(v0[2], v1[2], v2[2]);
+
+        const startX = Math.floor(minX / this.cellSize);
+        const startY = Math.floor(minY / this.cellSize);
+        const startZ = Math.floor(minZ / this.cellSize);
+        const endX = Math.floor(maxX / this.cellSize);
+        const endY = Math.floor(maxY / this.cellSize);
+        const endZ = Math.floor(maxZ / this.cellSize);
+
+        for (let cx = startX; cx <= endX; cx++) {
+            for (let cy = startY; cy <= endY; cy++) {
+                for (let cz = startZ; cz <= endZ; cz++) {
+                    const key = `${cx},${cy},${cz}`;
+                    let cell = this.spatialGrid.get(key);
+                    if (!cell) {
+                        cell = { triangles: [] };
+                        this.spatialGrid.set(key, cell);
+                    }
+                    cell.triangles.push(tri);
+                }
+            }
+        }
+    }
+
+    private getNearbyTriangles(position: number[], radius: number): Triangle[] {
+        this._nearbyTriangles.length = 0;
+        this._queriedCells.clear();
+
+        const minX = Math.floor((position[0] - radius) / this.cellSize);
+        const minY = Math.floor((position[1] - radius) / this.cellSize);
+        const minZ = Math.floor((position[2] - radius) / this.cellSize);
+        const maxX = Math.floor((position[0] + radius) / this.cellSize);
+        const maxY = Math.floor((position[1] + radius) / this.cellSize);
+        const maxZ = Math.floor((position[2] + radius) / this.cellSize);
+
+        for (let cx = minX; cx <= maxX; cx++) {
+            for (let cy = minY; cy <= maxY; cy++) {
+                for (let cz = minZ; cz <= maxZ; cz++) {
+                    const key = `${cx},${cy},${cz}`;
+                    if (this._queriedCells.has(key)) continue;
+                    this._queriedCells.add(key);
+                    
+                    const cell = this.spatialGrid.get(key);
+                    if (cell) {
+                        for (const tri of cell.triangles) {
+                            // Avoid duplicates (triangles spanning multiple cells)
+                            if (this._nearbyTriangles.indexOf(tri) === -1) {
+                                this._nearbyTriangles.push(tri);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return this._nearbyTriangles;
     }
 
     public resolveCollision(oldPos: number[], newPos: number[]): number[] {
         let resultPos = [...newPos];
 
-        const groundHeight = this.getGroundHeight(resultPos);
+        const groundHeight = this.getGroundHeightFast(resultPos);
         if (groundHeight !== null) {
             const minY = groundHeight + this.eyeHeight + 0.05;
             if (resultPos[1] < minY) {
@@ -88,10 +202,13 @@ export class CollisionSystem {
             radius: this.playerRadius
         };
 
+        const queryRadius = this.playerRadius + this.playerHeight;
+        const nearbyTris = this.getNearbyTriangles(resultPos, queryRadius);
+
         for (let iteration = 0; iteration < 3; iteration++) {
             let hadCollision = false;
             
-            for (const tri of this.triangles) {
+            for (const tri of nearbyTris) {
                 const collision = this.sphereTriangleCollision(playerSphere, tri);
                 
                 if (collision.collided) {
@@ -207,19 +324,23 @@ export class CollisionSystem {
         return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     }
 
-    public getGroundHeight(position: number[]): number | null {
-        const rayOrigin = [position[0], position[1] + 1000, position[2]];
+    private getGroundHeightFast(position: number[]): number | null {
         const rayDir = [0, -1, 0];
-        
         let closestHit: number | null = null;
         
-        for (const tri of this.triangles) {
+        const searchRadius = this.playerRadius + 2;
+        const nearbyTris = this.getNearbyTriangles(
+            [position[0], position[1] - this.playerHeight, position[2]], 
+            searchRadius + this.playerHeight
+        );
+        
+        for (const tri of nearbyTris) {
             if (tri.normal[1] < 0.2) continue;
             
+            const rayOrigin = [position[0], position[1] + 10, position[2]];
             const hit = this.rayTriangleIntersection(rayOrigin, rayDir, tri);
             if (hit !== null) {
                 const groundY = rayOrigin[1] + hit * rayDir[1];
-                // ignorar superfícies acima da posição atual do jogador
                 if (groundY <= position[1] + 0.001) {
                     if (closestHit === null || groundY > closestHit) {
                         closestHit = groundY;
@@ -236,6 +357,10 @@ export class CollisionSystem {
         }
         
         return closestHit;
+    }
+
+    public getGroundHeight(position: number[]): number | null {
+        return this.getGroundHeightFast(position);
     }
 
     public raycast(origin: number[], direction: number[], maxDistance: number = 2000): { point: number[], distance: number, normal: number[] } | null {

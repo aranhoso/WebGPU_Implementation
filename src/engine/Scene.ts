@@ -22,6 +22,11 @@ export class Scene {
     private hasSkybox: boolean = false;
     private afterRender?: (renderer: Renderer, camera: Camera) => void;
 
+    // vetores em cache para evitar alocações desnecessárias
+    private _cachedMVP: Float32Array = new Float32Array(16);
+    private _cachedSkyRight: number[] = [0, 0, 0];
+    private _cachedSkyUp: number[] = [0, 0, 0];
+
     constructor(renderer: Renderer, camera: Camera) {
         this.renderer = renderer;
         this.camera = camera;
@@ -150,13 +155,23 @@ export class Scene {
         if (this.hasSkybox) {
             const aspect = this.renderer.canvas.width / this.renderer.canvas.height;
             const tanHalfFov = Math.tan(this.camera.getFovY() * 0.5);
-            const skyRight = this.camera.getRight().map(v => v * tanHalfFov * aspect);
-            const skyUp = this.camera.getUp().map(v => v * tanHalfFov);
+            const right = this.camera.getRight();
+            const up = this.camera.getUp();
+            
+            // vetores em cache reutilizados
+            const scaleR = tanHalfFov * aspect;
+            this._cachedSkyRight[0] = right[0] * scaleR;
+            this._cachedSkyRight[1] = right[1] * scaleR;
+            this._cachedSkyRight[2] = right[2] * scaleR;
+            
+            this._cachedSkyUp[0] = up[0] * tanHalfFov;
+            this._cachedSkyUp[1] = up[1] * tanHalfFov;
+            this._cachedSkyUp[2] = up[2] * tanHalfFov;
 
             this.renderer.drawSkyboxInFrame(
                 this.camera.getFront(),
-                skyRight,
-                skyUp
+                this._cachedSkyRight,
+                this._cachedSkyUp
             );
         }
 
@@ -165,7 +180,10 @@ export class Scene {
         for (const obj of this.objects) {
             this.renderer.setMesh(obj.mesh);
             const mvp = this.camera.getMatrix(obj.modelMatrix);
-            const mvpArray = new Float32Array(mvp);
+            
+            for (let i = 0; i < 16; i++) {
+                this._cachedMVP[i] = mvp[i];
+            }
 
             if (obj.textures && obj.textures.size > 0 && obj.mesh.subMeshes.length > 1) {
                 for (const subMesh of obj.mesh.subMeshes) {
@@ -175,7 +193,7 @@ export class Scene {
                     } else {
                         this.renderer.resetTexture();
                     }
-                    this.renderer.drawMeshInFrame(mvpArray, subMesh.startIndex, subMesh.indexCount);
+                    this.renderer.drawMeshInFrame(this._cachedMVP, subMesh.startIndex, subMesh.indexCount);
                 }
             } else {
                 if (obj.texture) {
@@ -183,7 +201,7 @@ export class Scene {
                 } else {
                     this.renderer.resetTexture();
                 }
-                this.renderer.drawMeshInFrame(mvpArray);
+                this.renderer.drawMeshInFrame(this._cachedMVP);
             }
         }
 

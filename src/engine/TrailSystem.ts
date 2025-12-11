@@ -18,12 +18,13 @@ export class TrailSystem {
     private spawnInterval: number;
     private yOffset: number;
     private movementEpsilon: number;
+    private movementEpsilonSq: number; // Squared for faster comparison
 
     private data: Float32Array;
     private count = 0;
     private spawnTimer = 0;
-    private view = new Float32Array(0);
-    private lastAnchor: number[] | null = null;
+    private lastAnchor: number[] = [0, 0, 0];
+    private hasLastAnchor = false;
 
     constructor(renderer: Renderer, getCamera: () => Camera, options: TrailOptions = {}) {
         this.renderer = renderer;
@@ -34,19 +35,25 @@ export class TrailSystem {
         this.spawnInterval = options.spawnInterval ?? 0.015;
         this.yOffset = options.yOffset ?? -0.6;
         this.movementEpsilon = options.movementEpsilon ?? 0.01;
+        this.movementEpsilonSq = this.movementEpsilon * this.movementEpsilon;
 
         this.data = new Float32Array(this.maxPoints * 4); // vec3 pos + age
     }
 
     public update(dt: number, anchor: number[]): void {
-        if (!this.lastAnchor) {
-            this.lastAnchor = [...anchor];
+        if (!this.hasLastAnchor) {
+            this.lastAnchor[0] = anchor[0];
+            this.lastAnchor[1] = anchor[1];
+            this.lastAnchor[2] = anchor[2];
+            this.hasLastAnchor = true;
         }
 
         const dx = anchor[0] - this.lastAnchor[0];
         const dy = anchor[1] - this.lastAnchor[1];
         const dz = anchor[2] - this.lastAnchor[2];
-        const moved = Math.hypot(dx, dy, dz) > this.movementEpsilon;
+
+        const distSq = dx * dx + dy * dy + dz * dz;
+        const moved = distSq > this.movementEpsilonSq;
 
         // fade pros pontos ja existentes
         let write = 0;
@@ -54,14 +61,16 @@ export class TrailSystem {
             const idx = i * 4;
             const age = this.data[idx + 3] + dt;
             if (age <= this.ttl) {
-                this.data[write] = this.data[idx];
-                this.data[write + 1] = this.data[idx + 1];
-                this.data[write + 2] = this.data[idx + 2];
+                if (write !== idx) {
+                    this.data[write] = this.data[idx];
+                    this.data[write + 1] = this.data[idx + 1];
+                    this.data[write + 2] = this.data[idx + 2];
+                }
                 this.data[write + 3] = age;
                 write += 4;
             }
         }
-        this.count = write / 4;
+        this.count = write >> 2; // Faster division by 4
 
         if (moved) {
             this.spawnTimer += dt;
@@ -71,7 +80,7 @@ export class TrailSystem {
                     this.data.copyWithin(0, 4, this.maxPoints * 4);
                     this.count = this.maxPoints - 1;
                 }
-                const base = this.count * 4;
+                const base = this.count << 2; // Faster multiplication by 4
                 this.data[base] = anchor[0];
                 this.data[base + 1] = anchor[1] + this.yOffset;
                 this.data[base + 2] = anchor[2];
@@ -82,16 +91,16 @@ export class TrailSystem {
             this.spawnTimer = 0;
         }
 
-        const buf = this.data.buffer as ArrayBuffer;
-        this.view = new Float32Array(buf, 0, this.count * 4);
-        this.lastAnchor = [...anchor];
+        this.lastAnchor[0] = anchor[0];
+        this.lastAnchor[1] = anchor[1];
+        this.lastAnchor[2] = anchor[2];
     }
 
     public render(): void {
         if (this.count === 0) return;
         const cam = this.getCamera();
         this.renderer.drawTrailInFrame(
-            this.view,
+            this.data.subarray(0, this.count * 4),
             this.count,
             cam.getViewProjectionMatrix(),
             cam.getRight(),

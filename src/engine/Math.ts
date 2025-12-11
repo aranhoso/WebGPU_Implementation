@@ -317,19 +317,43 @@ export var mat4 = {
 };
 
 export const vec3 = {
-    add: function (a: number[], b: number[]) {
+    _temp1: [0, 0, 0] as number[],
+    _temp2: [0, 0, 0] as number[],
+
+    add: function (a: number[], b: number[]): number[] {
         return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
     },
 
-    subtract: function (a: number[], b: number[]) {
+    addTo: function (a: number[], b: number[], out: number[]): number[] {
+        out[0] = a[0] + b[0];
+        out[1] = a[1] + b[1];
+        out[2] = a[2] + b[2];
+        return out;
+    },
+
+    subtract: function (a: number[], b: number[]): number[] {
         return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
     },
 
-    scale: function (v: number[], s: number) {
+    subtractTo: function (a: number[], b: number[], out: number[]): number[] {
+        out[0] = a[0] - b[0];
+        out[1] = a[1] - b[1];
+        out[2] = a[2] - b[2];
+        return out;
+    },
+
+    scale: function (v: number[], s: number): number[] {
         return [v[0] * s, v[1] * s, v[2] * s];
     },
 
-    normalize: function (v: number[]) {
+    scaleTo: function (v: number[], s: number, out: number[]): number[] {
+        out[0] = v[0] * s;
+        out[1] = v[1] * s;
+        out[2] = v[2] * s;
+        return out;
+    },
+
+    normalize: function (v: number[]): number[] {
         var length = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
         if (length > 0.00001) {
             return [v[0] / length, v[1] / length, v[2] / length];
@@ -338,7 +362,21 @@ export const vec3 = {
         }
     },
 
-    cross: function (a: number[], b: number[]) {
+    normalizeTo: function (v: number[], out: number[]): number[] {
+        var length = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+        if (length > 0.00001) {
+            out[0] = v[0] / length;
+            out[1] = v[1] / length;
+            out[2] = v[2] / length;
+        } else {
+            out[0] = 0;
+            out[1] = 0;
+            out[2] = 0;
+        }
+        return out;
+    },
+
+    cross: function (a: number[], b: number[]): number[] {
         return [
             a[1] * b[2] - a[2] * b[1],
             a[2] * b[0] - a[0] * b[2],
@@ -346,7 +384,29 @@ export const vec3 = {
         ];
     },
 
-    length: function (v: number[]) {
+    crossTo: function (a: number[], b: number[], out: number[]): number[] {
+        out[0] = a[1] * b[2] - a[2] * b[1];
+        out[1] = a[2] * b[0] - a[0] * b[2];
+        out[2] = a[0] * b[1] - a[1] * b[0];
+        return out;
+    },
+
+    length: function (v: number[]): number {
         return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    },
+
+    lengthSq: function (v: number[]): number {
+        return v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+    },
+
+    dot: function (a: number[], b: number[]): number {
+        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    },
+
+    copy: function (src: number[], dst: number[]): number[] {
+        dst[0] = src[0];
+        dst[1] = src[1];
+        dst[2] = src[2];
+        return dst;
     }
 };

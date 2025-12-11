@@ -15,6 +15,12 @@ export class Camera {
     private up: number[] = [0, 1, 0];
     private worldUp: number[] = [0, 1, 0];
 
+    private _cachedVP: Float32Array = new Float32Array(16);
+    private _cachedMVP: Float32Array = new Float32Array(16);
+    private _tempTarget: number[] = [0, 0, 0];
+    private _tempVec: number[] = [0, 0, 0];
+    private _lastAspect: number = 0;
+
     constructor(aspectRatio: number) {
         this.projectionMatrix = mat4.identity();
         this.viewMatrix = mat4.identity();
@@ -24,6 +30,9 @@ export class Camera {
     }
 
     public updateProjection(aspectRatio: number) {
+        // ignora se a propoção da tela n tiver mudado
+        if (Math.abs(aspectRatio - this._lastAspect) < 0.0001) return;
+        this._lastAspect = aspectRatio;
         this.projectionMatrix = mat4.perspective(this.fovY, aspectRatio, 0.1, 100.0);
     }
 
@@ -43,13 +52,20 @@ export class Camera {
     }
 
     private updateVectors() {
-        const x = Math.cos(this.pitch) * Math.sin(this.yaw);
-        const y = Math.sin(this.pitch);
-        const z = -Math.cos(this.pitch) * Math.cos(this.yaw);
+        const cosPitch = Math.cos(this.pitch);
+        const sinPitch = Math.sin(this.pitch);
+        const sinYaw = Math.sin(this.yaw);
+        const cosYaw = Math.cos(this.yaw);
 
-        this.front = vec3.normalize([x, y, z]);
-        this.right = vec3.normalize(vec3.cross(this.front, this.worldUp));
-        this.up = vec3.normalize(vec3.cross(this.right, this.front));
+        this._tempVec[0] = cosPitch * sinYaw;
+        this._tempVec[1] = sinPitch;
+        this._tempVec[2] = -cosPitch * cosYaw;
+        vec3.normalizeTo(this._tempVec, this.front);
+
+        vec3.crossTo(this.front, this.worldUp, this._tempVec);
+        vec3.normalizeTo(this._tempVec, this.right);
+        vec3.crossTo(this.right, this.front, this._tempVec);
+        vec3.normalizeTo(this._tempVec, this.up);
     }
 
     public move(direction: 'FORWARD' | 'BACKWARD' | 'LEFT' | 'RIGHT' | 'UP' | 'DOWN', speed: number) {
@@ -123,7 +139,10 @@ export class Camera {
     public getViewProjectionMatrix(): Float32Array {
         this.updateView();
         const vp = mat4.multiply(this.projectionMatrix, this.viewMatrix);
-        return new Float32Array(vp);
+        for (let i = 0; i < 16; i++) {
+            this._cachedVP[i] = vp[i];
+        }
+        return this._cachedVP;
     }
 
     // função só pra rotacionar a camera pra ver o cubemap

@@ -4,6 +4,10 @@ export class Input {
     private isPointerLocked: boolean = false;
     private canvas: HTMLCanvasElement;
 
+
+    // Reusable delta object to reduce allocations
+    private readonly _cachedDelta: { x: number, y: number } = { x: 0, y: 0 };
+
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
         this.setupKeyboardListeners();
@@ -48,10 +52,11 @@ export class Input {
     }
 
     public getMouseDelta(): { x: number, y: number } {
-        const delta = { ...this.mouseMovement };
+        this._cachedDelta.x = this.mouseMovement.x;
+        this._cachedDelta.y = this.mouseMovement.y;
         this.mouseMovement.x = 0;
         this.mouseMovement.y = 0;
-        return delta;
+        return this._cachedDelta;
     }
 
     public isLocked(): boolean {
