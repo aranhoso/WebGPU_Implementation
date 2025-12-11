@@ -259,7 +259,6 @@ export class Scene {
 
             this.render();
 
-            // Use setTimeout(0) for unlimited FPS instead of requestAnimationFrame
             setTimeout(frame, 0);
         };
 
