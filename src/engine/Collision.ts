@@ -24,7 +24,8 @@ export class CollisionSystem {
     private eyeHeight: number;
     
     // angulo maximo para ser considerado um chão
-    private minGroundNormalY: number = 0.4; // +ou- 75 graus
+    private minGroundNormalY: number = 0.7; // cos(45°) ≈ 0.707 - angulo max de ~45 graus
+    private maxSlopeAngle: number = Math.acos(0.7); // ~45 graus em radianos
 
     // particionamento espacial 
     private spatialGrid: Map<string, SpatialCell> = new Map();
@@ -216,16 +217,23 @@ export class CollisionSystem {
 
                     const isWalkable = tri.normal[1] >= this.minGroundNormalY;
                     
+                    let pushNormal = collision.normal;
+                    
+                    const normalDot = this.dot(collision.normal, tri.normal);
+                    if (normalDot < 0.5) {
+                        pushNormal = collision.normal;
+                    }
+                    
                     if (isWalkable) {
-                        const pushVector = vec3.scale(collision.normal, collision.depth + 0.01);
+                        const pushVector = vec3.scale(pushNormal, collision.depth + 0.01);
                         resultPos[0] += pushVector[0];
                         resultPos[1] += pushVector[1];
                         resultPos[2] += pushVector[2];
                     } else {
-                        const horizontalLen = Math.sqrt(collision.normal[0] * collision.normal[0] + collision.normal[2] * collision.normal[2]);
+                        const horizontalLen = Math.sqrt(pushNormal[0] * pushNormal[0] + pushNormal[2] * pushNormal[2]);
                         
                         if (horizontalLen > 0.001) {
-                            const horizontalNormal = [collision.normal[0] / horizontalLen, 0, collision.normal[2] / horizontalLen];
+                            const horizontalNormal = [pushNormal[0] / horizontalLen, 0, pushNormal[2] / horizontalLen];
                             const pushVector = vec3.scale(horizontalNormal, collision.depth + 0.01);
                             resultPos[0] += pushVector[0];
                             resultPos[2] += pushVector[2];
@@ -361,6 +369,66 @@ export class CollisionSystem {
 
     public getGroundHeight(position: number[]): number | null {
         return this.getGroundHeightFast(position);
+    }
+
+    public getGroundInfo(position: number[]): { height: number, normal: number[], isWalkable: boolean } | null {
+        const rayDir = [0, -1, 0];
+        let closestHit: { height: number, normal: number[], isWalkable: boolean } | null = null;
+        let closestDist = Infinity;
+        
+        const searchRadius = this.playerRadius + 2;
+        const nearbyTris = this.getNearbyTriangles(
+            [position[0], position[1] - this.playerHeight, position[2]], 
+            searchRadius + this.playerHeight
+        );
+        
+        for (const tri of nearbyTris) {
+            // ignora normais muito pequenas (triângulos degenerados)
+            const normalLen = Math.sqrt(tri.normal[0] * tri.normal[0] + tri.normal[1] * tri.normal[1] + tri.normal[2] * tri.normal[2]);
+            if (normalLen < 0.001) continue;
+            
+            if (tri.normal[1] < 0.1) continue;
+            
+            const rayOrigin = [position[0], position[1] + 10, position[2]];
+            const hit = this.rayTriangleIntersection(rayOrigin, rayDir, tri);
+            if (hit !== null) {
+                const groundY = rayOrigin[1] + hit * rayDir[1];
+                if (groundY <= position[1] + 0.001) {
+                    const dist = position[1] - groundY;
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        const isWalkable = tri.normal[1] >= this.minGroundNormalY;
+                        closestHit = {
+                            height: groundY,
+                            normal: [...tri.normal],
+                            isWalkable
+                        };
+                    }
+                }
+            }
+        }
+
+        const infiniteGroundY = 0;
+        if (infiniteGroundY <= position[1] + 0.001) {
+            const dist = position[1] - infiniteGroundY;
+            if (closestHit === null || dist < closestDist) {
+                closestHit = {
+                    height: infiniteGroundY,
+                    normal: [0, 1, 0],
+                    isWalkable: true
+                };
+            }
+        }
+        
+        return closestHit;
+    }
+
+    public getMinGroundNormalY(): number {
+        return this.minGroundNormalY;
+    }
+
+    public getMaxSlopeAngle(): number {
+        return this.maxSlopeAngle;
     }
 
     public raycast(origin: number[], direction: number[], maxDistance: number = 2000): { point: number[], distance: number, normal: number[] } | null {

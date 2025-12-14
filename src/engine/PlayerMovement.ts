@@ -32,6 +32,11 @@ export class PlayerMovement {
     
     private stepHeight: number = 0.1; // altura max do degrau que o personagem pode subir
     
+    private minGroundNormalY: number = 0.7; // cos(45°) - superfícies mais íngremes causam slide
+    private slopeSlideSpeed: number = 10; // velocidade do deslize em desniveis
+    private isOnSteepSlope: boolean = false;
+    private groundNormal: number[] = [0, 1, 0];
+    
     private collision: CollisionSystem | null = null;
 
     private readonly _tempNewPos: number[] = [0, 0, 0];
@@ -41,7 +46,9 @@ export class PlayerMovement {
     constructor() {}
     
     public setCollisionSystem(collision: CollisionSystem): void {
-        this.collision = collision;
+        if (collision) {
+            this.minGroundNormalY = collision.getMinGroundNormalY();
+        }
     }
     
     public setPosition(pos: number[]): void {
@@ -100,6 +107,8 @@ export class PlayerMovement {
         
         if (this.isGrounded) {
             this.groundMove(deltaTime, inputX, inputZ);
+        } else if (this.isOnSteepSlope) {
+            this.slopeSlideMove(deltaTime, inputX, inputZ);
         } else {
             this.airMove(deltaTime, inputX, inputZ);
         }
@@ -125,12 +134,18 @@ export class PlayerMovement {
 
     private checkGrounded(): void {
         if (this.collision) {
-            const groundHeight = this.collision.getGroundHeight(this.position);
-            if (groundHeight !== null) {
+            const groundInfo = this.collision.getGroundInfo(this.position);
+            if (groundInfo !== null) {
+                const groundHeight = groundInfo.height;
+                this.groundNormal = groundInfo.normal;
+                
                 const feetY = this.position[1] - this.eyeHeight;
                 const distanceToGround = feetY - groundHeight;
 
-                this.isGrounded = distanceToGround <= 0.2 && distanceToGround >= -0.1;
+                // só considera grounded se a superfície for caminhável
+                const closeToGround = distanceToGround <= 0.2 && distanceToGround >= -0.1;
+                this.isOnSteepSlope = closeToGround && !groundInfo.isWalkable;
+                this.isGrounded = closeToGround && groundInfo.isWalkable;
                 
                 const isRising = this.velocity[1] > 0.5;
                 
@@ -195,10 +210,54 @@ export class PlayerMovement {
         }
     }
     
+
+    // surfing bem primitivo
+    private slopeSlideMove(deltaTime: number, inputX: number, inputZ: number): void {
+        const slideDir = this.getSlopeSlideDirection();
+        
+        const slideAccel = this.slopeSlideSpeed * (1 - this.groundNormal[1]);
+        this.velocity[0] += slideDir[0] * slideAccel * deltaTime;
+        this.velocity[2] += slideDir[2] * slideAccel * deltaTime;
+        
+        let wishdir = this.getWishDirection(inputX, inputZ);
+        const wishlen = vec3.length(wishdir);
+        let wishspeed = Math.min(1, wishlen) * this.moveSpeed * 0.3;
+        wishdir = wishlen > 0 ? vec3.normalize(wishdir) : [0, 0, 0];
+        
+        this.accelerate(wishdir, wishspeed, this.airAcceleration, deltaTime);
+        
+        this.applyFriction(deltaTime, 0.3);
+        
+        this.velocity[1] += this.gravity * deltaTime;
+        
+        this.wishJump = false;
+    }
+    
+    private getSlopeSlideDirection(): number[] {
+        const gravityVec = [0, -1, 0];
+        const dot = gravityVec[0] * this.groundNormal[0] + 
+                    gravityVec[1] * this.groundNormal[1] + 
+                    gravityVec[2] * this.groundNormal[2];
+        
+        const slideDir = [
+            gravityVec[0] - dot * this.groundNormal[0],
+            0,
+            gravityVec[2] - dot * this.groundNormal[2]
+        ];
+        
+        const len = Math.sqrt(slideDir[0] * slideDir[0] + slideDir[2] * slideDir[2]);
+        if (len > 0.001) {
+            slideDir[0] /= len;
+            slideDir[2] /= len;
+        }
+        
+        return slideDir;
+    }
+    
     private airMove(deltaTime: number, inputX: number, inputZ: number): void {
         let wishdir = this.getWishDirection(inputX, inputZ);
         const wishlen = vec3.length(wishdir);
-        let wishspeed = Math.min(1, wishlen) * this.moveSpeed; // clamp diagonal speed
+        let wishspeed = Math.min(1, wishlen) * this.moveSpeed;
         wishdir = wishlen > 0 ? vec3.normalize(wishdir) : [0, 0, 0];
         
         let accel: number;
@@ -313,6 +372,14 @@ export class PlayerMovement {
     
     public getIsGrounded(): boolean {
         return this.isGrounded;
+    }
+    
+    public getIsOnSteepSlope(): boolean {
+        return this.isOnSteepSlope;
+    }
+    
+    public getGroundNormal(): number[] {
+        return this.groundNormal;
     }
     
     public setEyeHeight(height: number): void {
