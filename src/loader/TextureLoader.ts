@@ -2,7 +2,7 @@ export class TextureLoader {
     static async load(device: GPUDevice, url: string, isNormalMap: boolean = false): Promise<GPUTexture> {
         const res = await fetch(url);
         const blob = await res.blob();
-        const source = await createImageBitmap(blob);
+        const source = await createImageBitmap(blob, { premultiplyAlpha: 'none' });
         const mipLevelCount = Math.floor(Math.log2(Math.max(source.width, source.height))) + 1;
         
         const texture = device.createTexture({

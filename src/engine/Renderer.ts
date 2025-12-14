@@ -104,7 +104,21 @@ export class Renderer {
             fragment: {
                 module: shaderModule,
                 entryPoint: 'fs_main',
-                targets: [{ format: this.canvasFormat }]
+                targets: [{
+                    format: this.canvasFormat,
+                    blend: {
+                        color: {
+                            srcFactor: 'src-alpha',
+                            dstFactor: 'one-minus-src-alpha',
+                            operation: 'add'
+                        },
+                        alpha: {
+                            srcFactor: 'one',
+                            dstFactor: 'one-minus-src-alpha',
+                            operation: 'add'
+                        }
+                    }
+                }]
             },
             depthStencil: {
                 depthWriteEnabled: true,

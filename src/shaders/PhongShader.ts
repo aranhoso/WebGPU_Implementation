@@ -33,7 +33,14 @@ fn vs_main(input : VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(@location(0) UV : vec2<f32>, @location(1) Normal : vec3<f32>) -> @location(0) vec4<f32> {
-  let albedo = textureSample(diffuseTexture, sceneSampler, UV).rgb;
+  let texColor = textureSample(diffuseTexture, sceneSampler, UV);
+  let albedo = texColor.rgb;
+  let alpha = texColor.a;
+
+  // Discard fully transparent fragments (alpha cutoff for better performance)
+  if (alpha < 0.1) {
+    discard;
+  }
 
   let n = normalize(Normal);
   let lightDir = normalize(uniforms.lightDirShininess.xyz);
@@ -52,6 +59,6 @@ fn fs_main(@location(0) UV : vec2<f32>, @location(1) Normal : vec3<f32>) -> @loc
   let lighting = min(ambient + diffuse + specular * 0.5, vec3<f32>(2.5, 2.5, 2.5));
   let color = albedo * lighting;
 
-  return vec4<f32>(color, 1.0);
+  return vec4<f32>(color, alpha);
 }
 `;
