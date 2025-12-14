@@ -25,9 +25,6 @@ export class CollisionSystem {
     
     // angulo maximo para ser considerado um chão
     private minGroundNormalY: number = 0.4; // +ou- 75 graus
-    
-    // max step height the player can climb automatically
-    private maxStepHeight: number = 0.1;
 
     // particionamento espacial 
     private spatialGrid: Map<string, SpatialCell> = new Map();
@@ -189,21 +186,11 @@ export class CollisionSystem {
     public resolveCollision(oldPos: number[], newPos: number[]): number[] {
         let resultPos = [...newPos];
 
-        // Get ground height at old position to determine step height limit
-        const oldGroundHeight = this.getGroundHeightFast(oldPos);
-        const oldFeetY = oldPos[1] - this.eyeHeight;
-
         const groundHeight = this.getGroundHeightFast(resultPos);
         if (groundHeight !== null) {
             const minY = groundHeight + this.eyeHeight + 0.05;
             if (resultPos[1] < minY) {
-                // Check if this would be an auto-step (climbing up)
-                const stepUpHeight = groundHeight - (oldGroundHeight ?? oldFeetY);
-                if (stepUpHeight <= this.maxStepHeight) {
-                    // Allow stepping up for small steps
-                    resultPos[1] = minY;
-                }
-                // If step is too high, don't snap up - let the sphere collision handle it
+                resultPos[1] = minY;
             }
         }
         
@@ -225,34 +212,15 @@ export class CollisionSystem {
                 const collision = this.sphereTriangleCollision(playerSphere, tri);
                 
                 if (collision.collided) {
-                    console.log("colidiu");
                     hadCollision = true;
 
                     const isWalkable = tri.normal[1] >= this.minGroundNormalY;
                     
                     if (isWalkable) {
-                        console.log("walkable");
-                        // For walkable surfaces, check if this would exceed step height
                         const pushVector = vec3.scale(collision.normal, collision.depth + 0.01);
-                        const potentialNewY = resultPos[1] + pushVector[1];
-                        const potentialStepUp = potentialNewY - oldPos[1];
-                        
-                        if (potentialStepUp <= this.maxStepHeight) {
-                            console.log("pushed");
-                            // Small step - allow full push
-                            resultPos[0] += pushVector[0];
-                            resultPos[1] += pushVector[1];
-                            resultPos[2] += pushVector[2];
-                        } else {
-                            // Step too high - only push horizontally (treat as wall)
-                            const horizontalLen = Math.sqrt(collision.normal[0] * collision.normal[0] + collision.normal[2] * collision.normal[2]);
-                            if (horizontalLen > 0.001) {
-                                const horizontalNormal = [collision.normal[0] / horizontalLen, 0, collision.normal[2] / horizontalLen];
-                                const horizPush = vec3.scale(horizontalNormal, collision.depth + 0.01);
-                                resultPos[0] += horizPush[0];
-                                resultPos[2] += horizPush[2];
-                            }
-                        }
+                        resultPos[0] += pushVector[0];
+                        resultPos[1] += pushVector[1];
+                        resultPos[2] += pushVector[2];
                     } else {
                         const horizontalLen = Math.sqrt(collision.normal[0] * collision.normal[0] + collision.normal[2] * collision.normal[2]);
                         
@@ -277,11 +245,7 @@ export class CollisionSystem {
         if (finalGroundHeight !== null) {
             const minY = finalGroundHeight + this.eyeHeight;
             if (resultPos[1] < minY) {
-                // Check step height limit for the final ground snap
-                const stepUpHeight = finalGroundHeight - (oldGroundHeight ?? oldFeetY);
-                if (stepUpHeight <= this.maxStepHeight) {
-                    resultPos[1] = minY;
-                }
+                resultPos[1] = minY;
             }
         }
         
@@ -300,7 +264,6 @@ export class CollisionSystem {
         const radiusSq = sphere.radius * sphere.radius;
         
         if (distSq < radiusSq) {
-            console.log("dentro");
             const dist = Math.sqrt(distSq);
             const normal = dist > 0.0001 ? vec3.scale(diff, 1 / dist) : triangle.normal;
             const depth = sphere.radius - dist;
