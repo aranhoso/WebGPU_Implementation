@@ -9,4 +9,4 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 1
-map_Kd C:/Users/guilh/Desktop/Pastas/Estudo/Faculdade/Matérias/2025-2/cg/projeto-final/WebGPU_Implementation/src/assets/Arctic_T/t_arctic.png
+map_Kd ./texture/t_arctic.png
