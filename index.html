@@ -143,6 +143,176 @@
     </style>
 </head>
 <body>
+    <div id="main-menu">
+        <div id="map-select-screen" class="menu-screen active">
+            <div id="map-select-container">
+                <img src="src/assets/images/logo.png" alt="B.H.O.P" class="menu-logo">
+                <h2>Selecione o Mapa</h2>
+                <div id="map-list">
+                    <div class="map-card" data-map="Bhop_Seal">
+                        <div class="map-name">Bhop Seal</div>
+                        <div class="map-desc">Mapa clássico</div>
+                    </div>
+                    <div class="map-card" data-map="Bhop_XMas">
+                        <div class="map-name">Bhop XMas</div>
+                        <div class="map-desc">Mapa de Natal</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="skin-select-screen" class="menu-screen">
+            <div id="skin-select-container">
+                <img src="src/assets/images/logo.png" alt="B.H.O.P" class="menu-logo">
+                <h2>Selecione o Personagem</h2>
+                <div id="skin-list">
+                    <div class="skin-card" data-skin="Arctic_T">
+                        <div class="skin-name">Arctic T</div>
+                        <div class="skin-desc">Terrorista</div>
+                    </div>
+                    <div class="skin-card" data-skin="CT">
+                        <div class="skin-name">Urban CT</div>
+                        <div class="skin-desc">Counter-Terrorista</div>
+                    </div>
+                </div>
+                <button id="back-to-maps" class="menu-button">← Voltar</button>
+            </div>
+        </div>
+
+        <div id="loading-indicator" style="display: none;">
+            <div class="loading-text">Carregando...</div>
+        </div>
+    </div>
+    <style>
+        #main-menu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: url('src/assets/images/background.png') center center / cover no-repeat;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+        #main-menu.hidden {
+            display: none;
+        }
+        .menu-screen {
+            display: none;
+            text-align: center;
+            color: #fff;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        .menu-screen.active {
+            display: block;
+        }
+        .menu-logo {
+            max-width: 300px;
+            height: auto;
+            margin-bottom: 10px;
+            filter: drop-shadow(0 0 20px #00ff00);
+        }
+        #map-select-container h2,
+        #skin-select-container h2 {
+            font-size: 24px;
+            margin-bottom: 30px;
+            color: #aaa;
+        }
+        #map-list {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .map-card {
+            background: rgba(0, 255, 0, 0.1);
+            border: 2px solid #00ff00;
+            border-radius: 10px;
+            padding: 30px 40px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 200px;
+        }
+        .map-card:hover {
+            background: rgba(0, 255, 0, 0.3);
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
+        }
+        .map-card .map-name {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #00ff00;
+        }
+        .map-card .map-desc {
+            font-size: 14px;
+            color: #888;
+        }
+        #skin-list {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+        }
+        .skin-card {
+            background: rgba(0, 255, 0, 0.1);
+            border: 2px solid #00ff00;
+            border-radius: 10px;
+            padding: 30px 40px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 200px;
+        }
+        .skin-card:hover {
+            background: rgba(0, 255, 0, 0.3);
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
+        }
+        .skin-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ff00;
+            margin-bottom: 10px;
+        }
+        .skin-desc {
+            font-size: 14px;
+            color: #888;
+        }
+        .menu-button {
+            background: rgba(0, 255, 0, 0.2);
+            border: 2px solid #00ff00;
+            color: #00ff00;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 16px;
+            padding: 10px 30px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+        .menu-button:hover {
+            background: rgba(0, 255, 0, 0.4);
+        }
+        #loading-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .loading-text {
+            font-size: 18px;
+            color: #00ff00;
+            font-family: 'Consolas', 'Monaco', monospace;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+
     <div id="debug-info">
         <div id="fps-counter">FPS: --</div>
         <div id="coords-display">Pos: (0.00, 0.00, 0.00)</div>

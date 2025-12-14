@@ -8,6 +8,121 @@ import { PlayerMovement } from './engine/PlayerMovement';
 import { TrailSystem } from './engine/TrailSystem';
 import { LadderSystem } from './engine/LadderSystem';
 import { Chronometer } from './engine/Chronometer';
+import { AreaMarker } from './engine/AreaMarker';
+
+interface SkinConfig {
+    id: string;
+    name: string;
+    description: string;
+    modelPath: string;
+    texturePath: string;
+    armsModelPath: string;
+    armsTexturePath: string;
+}
+
+const SKIN_CONFIGS: Record<string, SkinConfig> = {
+    'Arctic_T': {
+        id: 'Arctic_T',
+        name: 'Arctic T',
+        description: 'Terrorist',
+        modelPath: 'src/assets/Arctic_T/Arctic_T.obj',
+        texturePath: 'src/assets/Arctic_T/t_arctic.png',
+        armsModelPath: 'src/assets/Arctic_T_arms/Arcitc_T-arms.obj',
+        armsTexturePath: 'src/assets/Arctic_T/t_arctic.png'
+    },
+    'CT': {
+        id: 'CT',
+        name: 'Urban CT',
+        description: 'Counter-Terrorist',
+        modelPath: 'src/assets/CT/Aranhoso_character.obj',
+        texturePath: 'src/assets/CT/texture/ct_urban.png',
+        armsModelPath: 'src/assets/CT_arms/CT_arms.obj',
+        armsTexturePath: 'src/assets/CT_arms/texture/ct_urban.png'
+    }
+};
+
+let selectedSkinConfig: SkinConfig = SKIN_CONFIGS['Arctic_T'];
+
+interface LadderConfig {
+    bottomRight: [number, number, number];
+    bottomLeft: [number, number, number];
+    topLeft: [number, number, number];
+    topRight: [number, number, number];
+    thickness?: number;
+}
+
+interface LightingConfig {
+    lightDirection: [number, number, number];
+    lightIntensity: number;
+    ambientIntensity: number;
+    shininess: number;
+}
+
+interface MapConfig {
+    name: string;
+    objPath: string;
+    spawnPosition: [number, number, number];
+    chronometer: {
+        start: { position: [number, number, number]; radius: number };
+        finish: { position: [number, number, number]; radius: number };
+    };
+    ladders: LadderConfig[];
+    lighting?: LightingConfig;
+    skybox: [string, string, string, string, string, string]; // right, left, top, bottom, front, back
+}
+
+const MAP_CONFIGS: Record<string, MapConfig> = {
+    'Bhop_Seal': {
+        name: 'Bhop Seal',
+        objPath: 'src/assets/Bhop_Seal/Untitled.obj',
+        spawnPosition: [-24, 10, 19],
+        chronometer: {
+            start: { position: [-18.518, 9.251, 20.083], radius: 2 },
+            finish: { position: [-24.217, 32.206, -8.663], radius: 2 }
+        },
+        ladders: [
+            {
+                bottomRight: [37.693, 9.810, 6.950],
+                bottomLeft: [38.289, 9.847, 7.781],
+                topLeft: [38.331, 18.000, 7.834],
+                topRight: [37.835, 18.000, 7.213],
+                thickness: 0.35
+            }
+        ],
+        skybox: [
+            'src/assets/cubemaps/normal/right.jpg',
+            'src/assets/cubemaps/normal/left.jpg',
+            'src/assets/cubemaps/normal/top.jpg',
+            'src/assets/cubemaps/normal/bottom.jpg',
+            'src/assets/cubemaps/normal/front.jpg',
+            'src/assets/cubemaps/normal/back.jpg'
+        ]
+    },
+    'Bhop_XMas': {
+        name: 'Bhop XMas',
+        objPath: 'src/assets/Bhop_XMas/bhop_xmas.obj',
+        spawnPosition: [18.52, 2.73, 12.31],
+        chronometer: {
+            start: { position: [18.870, 2.302, 14.176], radius: 2 },
+            finish: { position: [16.593, 20.706, -33.441], radius: 2 }
+        },
+        ladders: [],
+        lighting: {
+            lightDirection: [0.00, 0.03, 0.06],
+            lightIntensity: 0.53,
+            ambientIntensity: 0.61,
+            shininess: 4
+        },
+        skybox: [
+            'src/assets/cubemaps/neve/right.jpg',
+            'src/assets/cubemaps/neve/left.jpg',
+            'src/assets/cubemaps/neve/top.jpg',
+            'src/assets/cubemaps/neve/bottom.jpg',
+            'src/assets/cubemaps/neve/front.jpg',
+            'src/assets/cubemaps/neve/back.jpg'
+        ]
+    }
+};
 
 const canvas = document.getElementById('gfx-main') as HTMLCanvasElement;
 
@@ -16,28 +131,19 @@ const camera = new Camera(canvas.width / canvas.height);
 const scene = new Scene(renderer, camera);
 const input = new Input(canvas);
 
-// URLs do skybox (ordem: right, left, top, bottom, front, back)
-const skyboxUrls = [
-    'https://raw.githubusercontent.com/fegennari/3DWorld/refs/heads/master/textures/skybox/water_scene/right.jpg',
-    'https://raw.githubusercontent.com/fegennari/3DWorld/refs/heads/master/textures/skybox/water_scene/left.jpg',
-    'https://raw.githubusercontent.com/fegennari/3DWorld/refs/heads/master/textures/skybox/water_scene/top.jpg',
-    'https://raw.githubusercontent.com/fegennari/3DWorld/refs/heads/master/textures/skybox/water_scene/bottom.jpg',
-    'https://raw.githubusercontent.com/fegennari/3DWorld/refs/heads/master/textures/skybox/water_scene/front.jpg',
-    'https://raw.githubusercontent.com/fegennari/3DWorld/refs/heads/master/textures/skybox/water_scene/back.jpg',
-];
+let selectedMapConfig: MapConfig | null = null;
 
-const startGame = async () => {
+const startGame = async (mapConfig: MapConfig) => {
     try {
         await renderer.initialize();
 
-        await scene.loadSkybox(skyboxUrls);
+        await scene.loadSkybox(mapConfig.skybox);
 
-        const mapObj = await scene.loadObjectWithMaterials(
-            'src/assets/Bhop_Seal/Untitled.obj'
-        );
+        console.log(`Loading map: ${mapConfig.name}`);
+        const mapObj = await scene.loadObjectWithMaterials(mapConfig.objPath);
 
         if (!mapObj) {
-            console.warn("Falha ao carregar o mapa Bhop_Seal");
+            console.warn(`Falha ao carregar o mapa ${mapConfig.name}`);
         }
         
         const collision = new CollisionSystem(0.4, 1.8, 1.6);
@@ -46,33 +152,35 @@ const startGame = async () => {
         }
 
         const ladderSystem = new LadderSystem();
-        ladderSystem.addLadderFromCorners(
-            [37.693, 9.810, 6.950], //bottom right
-            [38.289, 9.847, 7.781], //bottom left
-            [38.331, 18.000, 7.834], //top left
-            [37.835, 18.000, 7.213], //top right
-            { thickness: 0.35 }
-        );
+        for (const ladder of mapConfig.ladders) {
+            ladderSystem.addLadderFromCorners(
+                ladder.bottomRight,
+                ladder.bottomLeft,
+                ladder.topLeft,
+                ladder.topRight,
+                { thickness: ladder.thickness ?? 0.35 }
+            );
+        }
 
         const arcticObj = await scene.loadObject(
-            'src/assets/Arctic_T/Arctic_T.obj',
-            'src/assets/Arctic_T/t_arctic.png'
+            selectedSkinConfig.modelPath,
+            selectedSkinConfig.texturePath
         );
 
         if (!arcticObj) {
-            throw new Error("Falha ao carregar o objeto Arctic_T");
+            throw new Error(`Falha ao carregar o objeto ${selectedSkinConfig.name}`);
         }
 
         const arcticArmsObj = await scene.loadObject(
-            'src/assets/Arctic_T_arms/Arcitc_T-arms.obj',
-            'src/assets/Arctic_T/t_arctic.png'
+            selectedSkinConfig.armsModelPath,
+            selectedSkinConfig.armsTexturePath
         );
 
         if (!arcticArmsObj) {
-            console.warn("Falha ao carregar o objeto Arctic_T-arms");
+            console.warn(`Falha ao carregar o objeto ${selectedSkinConfig.name} arms`);
         }
 
-        const spawnPosition = [-24, 10, 19];
+        const spawnPosition: [number, number, number] = [...mapConfig.spawnPosition];
         camera.setPosition(spawnPosition);
 
         const playerMovement = new PlayerMovement();
@@ -165,7 +273,6 @@ const startGame = async () => {
             });
         }
 
-        // CRT / Fisheye controls
         const fisheyeSlider = document.getElementById('fisheye-slider') as HTMLInputElement;
         const scanlineSlider = document.getElementById('scanline-slider') as HTMLInputElement;
         const rgbOffsetSlider = document.getElementById('rgbOffset-slider') as HTMLInputElement;
@@ -231,8 +338,8 @@ const startGame = async () => {
         const shininessValue = document.getElementById('shininess-value') as HTMLElement;
 
         const chronometer = new Chronometer(
-            { position: [-18.518, 9.251, 20.083], radius: 2 },
-            { position: [-24.217, 32.206, -8.663], radius: 2 },
+            mapConfig.chronometer.start,
+            mapConfig.chronometer.finish,
             chronoDisplay,
             scene
             );
@@ -263,6 +370,16 @@ const startGame = async () => {
         lightIntensitySlider?.addEventListener('input', syncLighting);
         ambientSlider?.addEventListener('input', syncLighting);
         shininessSlider?.addEventListener('input', syncLighting);
+
+        if (mapConfig.lighting) {
+            const l = mapConfig.lighting;
+            if (lightDirXSlider) lightDirXSlider.value = l.lightDirection[0].toString();
+            if (lightDirYSlider) lightDirYSlider.value = l.lightDirection[1].toString();
+            if (lightDirZSlider) lightDirZSlider.value = l.lightDirection[2].toString();
+            if (lightIntensitySlider) lightIntensitySlider.value = l.lightIntensity.toString();
+            if (ambientSlider) ambientSlider.value = l.ambientIntensity.toString();
+            if (shininessSlider) shininessSlider.value = l.shininess.toString();
+        }
 
         syncLighting();
         syncPostFx();
@@ -317,6 +434,13 @@ const startGame = async () => {
 
         let noclipKeyPressed = false;
 
+        const areaMarker = new AreaMarker();
+
+        const getPlayerPosition = (): [number, number, number] => {
+            const pos = noclip ? camera.position : playerMovement.getEyePosition();
+            return [pos[0], pos[1], pos[2]];
+        };
+
         scene.setAfterRender(() => {
             trailSystem.render();
         });
@@ -324,6 +448,8 @@ const startGame = async () => {
         scene.start((scene, deltaTime) => {
             const wasNoclip = previousNoclip;
             const interactPressed = input.isKeyPressed('KeyE');
+
+            areaMarker.update(input, getPlayerPosition);
 
             if (input.isKeyPressed('KeyN')) {
                 if (!noclipKeyPressed) {
@@ -420,7 +546,6 @@ const startGame = async () => {
                 }
             }
 
-            // chronometer update (runs in both noclip and normal; finish blocked in noclip)
             const eyePos = playerMovement.getEyePosition() as [number, number, number];
             chronometer.update(eyePos, interactPressed, uiVisible, false, noclip);
 
@@ -436,4 +561,72 @@ const startGame = async () => {
     }
 };
 
-startGame();
+const setupMenuSystem = () => {
+    const mainMenu = document.getElementById('main-menu');
+    const mapSelectScreen = document.getElementById('map-select-screen');
+    const skinSelectScreen = document.getElementById('skin-select-screen');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const mapCards = document.querySelectorAll('.map-card');
+    const skinCards = document.querySelectorAll('.skin-card');
+    const backToMapsBtn = document.getElementById('back-to-maps');
+
+    let pendingMapConfig: MapConfig | null = null;
+
+    mapCards.forEach(card => {
+        card.addEventListener('click', () => {
+            const mapId = card.getAttribute('data-map');
+            if (!mapId || !MAP_CONFIGS[mapId]) {
+                console.error(`Map config not found: ${mapId}`);
+                return;
+            }
+
+            pendingMapConfig = MAP_CONFIGS[mapId];
+            
+            if (mapSelectScreen) mapSelectScreen.classList.remove('active');
+            if (skinSelectScreen) skinSelectScreen.classList.add('active');
+        });
+    });
+
+    if (backToMapsBtn) {
+        backToMapsBtn.addEventListener('click', () => {
+            if (skinSelectScreen) skinSelectScreen.classList.remove('active');
+            if (mapSelectScreen) mapSelectScreen.classList.add('active');
+            pendingMapConfig = null;
+        });
+    }
+
+    skinCards.forEach(card => {
+        card.addEventListener('click', async () => {
+            const skinId = card.getAttribute('data-skin');
+            if (!skinId || !SKIN_CONFIGS[skinId]) {
+                console.error(`Skin config not found: ${skinId}`);
+                return;
+            }
+
+            if (!pendingMapConfig) {
+                console.error('No map selected');
+                return;
+            }
+
+            selectedSkinConfig = SKIN_CONFIGS[skinId];
+            selectedMapConfig = pendingMapConfig;
+
+            if (skinSelectScreen) skinSelectScreen.classList.remove('active');
+            if (loadingIndicator) loadingIndicator.style.display = 'block';
+
+            try {
+                await startGame(selectedMapConfig);
+                
+                if (mainMenu) {
+                    mainMenu.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Falha ao iniciar o jogo:', error);
+                if (loadingIndicator) loadingIndicator.style.display = 'none';
+                if (mapSelectScreen) mapSelectScreen.classList.add('active');
+            }
+        });
+    });
+};
+
+setupMenuSystem();
