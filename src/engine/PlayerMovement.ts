@@ -46,6 +46,7 @@ export class PlayerMovement {
     constructor() {}
     
     public setCollisionSystem(collision: CollisionSystem): void {
+        this.collision = collision;
         if (collision) {
             this.minGroundNormalY = collision.getMinGroundNormalY();
         }
