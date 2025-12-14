@@ -170,6 +170,10 @@ export class Chronometer {
         this.displayEl.textContent = lines.join(' | ');
     }
 
+    public isRunning(): boolean {
+        return this.running;
+    }
+
     public reset(): void {
         this.running = false;
         this.startTime = 0;

@@ -24,7 +24,7 @@ export class CollisionSystem {
     private eyeHeight: number;
     
     // angulo maximo para ser considerado um chão
-    private minGroundNormalY: number = 0.7; // cos(45°) ≈ 0.707 - angulo max de ~45 graus
+    private minGroundNormalY: number = 0.7; // cos(45°) ~ 0.707 - angulo max de ~45 graus
     private maxSlopeAngle: number = Math.acos(0.7); // ~45 graus em radianos
 
     // particionamento espacial 
@@ -171,7 +171,6 @@ export class CollisionSystem {
                     const cell = this.spatialGrid.get(key);
                     if (cell) {
                         for (const tri of cell.triangles) {
-                            // Avoid duplicates (triangles spanning multiple cells)
                             if (this._nearbyTriangles.indexOf(tri) === -1) {
                                 this._nearbyTriangles.push(tri);
                             }

@@ -9,6 +9,8 @@ import { TrailSystem } from './engine/TrailSystem';
 import { LadderSystem } from './engine/LadderSystem';
 import { Chronometer } from './engine/Chronometer';
 import { AreaMarker } from './engine/AreaMarker';
+import { DeadZoneSystem } from './engine/DeadZoneSystem';
+import { CheckpointConfig, CheckpointSystem } from './engine/CheckpointSystem';
 
 interface SkinConfig {
     id: string;
@@ -68,6 +70,7 @@ interface MapConfig {
     };
     ladders: LadderConfig[];
     lighting?: LightingConfig;
+    checkpoints?: CheckpointConfig[];
     skybox: [string, string, string, string, string, string]; // right, left, top, bottom, front, back
 }
 
@@ -113,6 +116,26 @@ const MAP_CONFIGS: Record<string, MapConfig> = {
             ambientIntensity: 0.61,
             shininess: 4
         },
+        checkpoints: [
+            // 14.26, 3.69, 3.67
+            // 4.69, 7.07, -0.60
+            // 6.64, 6.52, -31.61
+            // 17.13, 6.55, -33.18
+            // 32.38, 7.54, -21.31
+            // 35.35, 14.24, -15.12
+            // 7.01, 14.22, 0.98
+            // -3.13, 15.19, -6.79
+            // 2.17, 14.26, -29.73
+            { position: [14.26, 3.69, 3.67], radius: 1.2 },
+            { position: [4.69, 7.07, -0.60], radius: 1.2 },
+            { position: [6.64, 6.52, -31.61], radius: 1.2 },
+            { position: [17.13, 6.55, -33.18], radius: 1.2 },
+            { position: [32.38, 7.54, -21.31], radius: 1.2 },
+            { position: [35.35, 14.24, -15.12], radius: 1.2 },
+            { position: [7.01, 14.22, 0.98], radius: 1.2 },
+            { position: [-3.13, 15.19, -6.79], radius: 1.2 },
+            { position: [2.17, 14.26, -29.73], radius: 1.2 }
+        ],
         skybox: [
             'src/assets/cubemaps/neve/right.jpg',
             'src/assets/cubemaps/neve/left.jpg',
@@ -182,6 +205,48 @@ const startGame = async (mapConfig: MapConfig) => {
 
         const spawnPosition: [number, number, number] = [...mapConfig.spawnPosition];
         camera.setPosition(spawnPosition);
+
+        // Dead zone system
+        const deadZoneSystem = new DeadZoneSystem();
+        deadZoneSystem.setSpawnPoint(spawnPosition[0], spawnPosition[1], spawnPosition[2]);
+
+        const checkpointSystem = new CheckpointSystem(scene, renderer, spawnPosition);
+        if (mapConfig.checkpoints) {
+            checkpointSystem.setCheckpoints(mapConfig.checkpoints);
+        }
+        
+        // Add dead zones based on map
+        if (mapConfig.name === 'Bhop XMas') {
+            const xmasDeadZone = [
+                [5.675, 5.619, -6.023],
+                [4.248, 5.630, -7.662],
+                [3.173, 5.630, -6.980],
+                [1.660, 5.630, -9.938],
+                [0.861, 5.630, -12.522],
+                [0.599, 5.630, -15.590],
+                [0.979, 5.630, -18.353],
+                [1.765, 5.630, -21.093],
+                [3.349, 5.630, -23.813],
+                [5.159, 5.630, -25.991],
+                [6.852, 5.630, -27.378],
+                [2.905, 5.634, -33.301],
+                [0.242, 5.634, -30.582],
+                [-2.697, 5.634, -27.372],
+                [-4.592, 5.634, -23.374],
+                [-5.678, 5.634, -19.733],
+                [-6.411, 5.634, -15.313],
+                [-5.949, 5.634, -10.953],
+                [-4.719, 5.634, -7.062],
+                [-2.669, 5.634, -3.032],
+                [-3.577, 5.603, -2.425],
+                [-1.696, 5.603, -0.596],
+                [0.085, 5.603, -0.228]
+            ];
+            deadZoneSystem.addDeadZone(xmasDeadZone, 2.5, 5.7, 'xmas_main_deadzone');
+        }
+        
+        // deadzone global
+        deadZoneSystem.addKillFloor(-20, 'global_kill_floor');
 
         const playerMovement = new PlayerMovement();
         playerMovement.setCollisionSystem(collision);
@@ -428,6 +493,7 @@ const startGame = async (mapConfig: MapConfig) => {
 
         let pickKeyPressed = false;
         let resetKeyPressed = false;
+        let checkpointTeleportPressed = false;
 
         const speedElement = document.getElementById('speed-display');
         const groundedElement = document.getElementById('grounded-display');
@@ -435,6 +501,8 @@ const startGame = async (mapConfig: MapConfig) => {
         let noclipKeyPressed = false;
 
         const areaMarker = new AreaMarker();
+
+        let wasChronoRunning = false;
 
         const getPlayerPosition = (): [number, number, number] => {
             const pos = noclip ? camera.position : playerMovement.getEyePosition();
@@ -467,6 +535,7 @@ const startGame = async (mapConfig: MapConfig) => {
                     playerMovement.setPosition([...spawnPosition]);
                     playerMovement.velocity = [0, 0, 0];
                     camera.setPosition([...spawnPosition]);
+                    checkpointSystem.resetToSpawn();
                     syncCameraToPlayer();
                     resetKeyPressed = true;
                 }
@@ -532,8 +601,22 @@ const startGame = async (mapConfig: MapConfig) => {
                     playerMovement.update(deltaTime, inputX, inputZ, jumpPressed);
                 }
 
-                const eyePos = playerMovement.getEyePosition() as [number, number, number];
-                chronometer.update(eyePos, false, false);
+                // verifica se tá na deadzone
+                const playerPos = playerMovement.getEyePosition();
+                if (deadZoneSystem.checkPlayerInDeadZone(playerPos)) {
+                    const target = chronometer.isRunning() ? checkpointSystem.getLastCheckpoint() : deadZoneSystem.getSpawnPoint();
+                    playerMovement.setPosition(target);
+                    playerMovement.velocity = [0, 0, 0];
+                    if (!chronometer.isRunning()) {
+                        chronometer.reset();
+                        checkpointSystem.resetToSpawn();
+                    }
+                    syncCameraToPlayer();
+                }
+                const chronoRunning = chronometer.isRunning();
+                if (chronoRunning) {
+                    checkpointSystem.update(playerMovement.getEyePosition() as [number, number, number]);
+                }
 
                 syncCameraToPlayer();
                 
@@ -548,6 +631,26 @@ const startGame = async (mapConfig: MapConfig) => {
 
             const eyePos = playerMovement.getEyePosition() as [number, number, number];
             chronometer.update(eyePos, interactPressed, uiVisible, false, noclip);
+
+            const chronoRunning = chronometer.isRunning();
+            checkpointSystem.setActive(chronoRunning);
+
+            const teleportKeyDown = input.isKeyPressed('KeyT');
+            if (teleportKeyDown && chronoRunning && !checkpointTeleportPressed && !noclip) {
+                const target = checkpointSystem.getLastCheckpoint();
+                playerMovement.setPosition(target);
+                playerMovement.velocity = [0, 0, 0];
+                syncCameraToPlayer();
+                checkpointTeleportPressed = true;
+            }
+            if (!teleportKeyDown) {
+                checkpointTeleportPressed = false;
+            }
+
+            if (!chronoRunning && wasChronoRunning) {
+                checkpointSystem.setActive(false);
+            }
+            wasChronoRunning = chronoRunning;
 
             updateArcticArmsTransform(deltaTime);
             const anchor = noclip ? camera.position : playerMovement.getEyePosition();

@@ -37,7 +37,6 @@ fn fs_main(@location(0) UV : vec2<f32>, @location(1) Normal : vec3<f32>) -> @loc
   let albedo = texColor.rgb;
   let alpha = texColor.a;
 
-  // Discard fully transparent fragments (alpha cutoff for better performance)
   if (alpha < 0.1) {
     discard;
   }
