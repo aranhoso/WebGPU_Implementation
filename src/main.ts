@@ -206,15 +206,6 @@ const startGame = async (mapConfig: MapConfig) => {
       );
     }
 
-    const arcticObj = await scene.loadObject(
-      selectedSkinConfig.modelPath,
-      selectedSkinConfig.texturePath
-    );
-
-    if (!arcticObj) {
-      throw new Error(`Falha ao carregar o objeto ${selectedSkinConfig.name}`);
-    }
-
     const arcticArmsObj = await scene.loadObject(
       selectedSkinConfig.armsModelPath,
       selectedSkinConfig.armsTexturePath
